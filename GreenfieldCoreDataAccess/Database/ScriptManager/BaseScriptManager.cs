@@ -1,9 +1,6 @@
 using GreenfieldCoreDataAccess.Database.UnitOfWork;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
-using System.Collections.Concurrent;
-using System.Collections.Generic;
-using System.Linq;
 
 namespace GreenfieldCoreDataAccess.Database.ScriptManager;
 
@@ -100,7 +97,7 @@ public abstract class BaseScriptManager : IScriptManager
 
                     if (!groupedScripts.TryGetValue(dependency, out var depScripts) || depScripts.Count == 0)
                     {
-                        _logger.LogDebug("No scripts found for dependency '{Dependency}' required by {Script}", dependency, script.FilePath);
+                        _logger.LogWarning("No scripts found for dependency '{Dependency}' required by {Script}", dependency, script.FilePath);
                         continue;
                     }
 
@@ -123,7 +120,7 @@ public abstract class BaseScriptManager : IScriptManager
             }
             else
             {
-                _logger.LogDebug("Skipping script (no-op): {ScriptName}", script.FilePath);
+                _logger.LogTrace("Skipping script (no-op): {ScriptName}", script.FilePath);
             }
 
             // Mark as processed regardless of execution result

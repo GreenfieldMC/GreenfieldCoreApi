@@ -17,7 +17,7 @@ public class TransactionScope : ITransactionScope
         _logger = logger;
         Connection = new MySqlConnection(configuration.GetConnectionString("GreenfieldCoreDb") ?? throw new ArgumentException("Connection string 'GreenfieldCoreDb' not found."));
         Connection.Open();
-        _logger.LogDebug("TransactionScope opened a new connection.");
+        _logger.LogTrace("TransactionScope opened a new connection.");
     }
 
     public void Dispose()
@@ -29,7 +29,7 @@ public class TransactionScope : ITransactionScope
         {
             try
             {
-                _logger.LogDebug("TransactionScope disposing with an active transaction; rolling back.");
+                _logger.LogTrace("TransactionScope disposing with an active transaction; rolling back.");
                 Transaction.Rollback();
             }
             catch (Exception e)
@@ -69,7 +69,7 @@ public class TransactionScope : ITransactionScope
     public void BeginTransaction()
     {
         if (Transaction is not null) throw new InvalidOperationException("Transaction already in progress.");
-        _logger.LogDebug("Beginning new transaction in TransactionScope.");
+        _logger.LogTrace("Beginning new transaction in TransactionScope.");
         Transaction = Connection.BeginTransaction();
     }
 }

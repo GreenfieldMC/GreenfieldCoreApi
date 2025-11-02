@@ -10,7 +10,7 @@ namespace GreenfieldCoreApi.Controllers;
 [ApiController]
 [ApiVersion("1.0")]
 [Route("api/v{version:apiVersion}/[controller]")]
-public class LoginController(IClientAuthService clientAuthService) : ControllerBase
+public class LoginController(IClientAuthService clientAuthService, IConfiguration config) : ControllerBase
 {
 
     [AllowAnonymous]
@@ -22,7 +22,11 @@ public class LoginController(IClientAuthService clientAuthService) : ControllerB
         try
         {
             var token = await clientAuthService.AuthenticateLogin(request.client_id, request.client_secret);
-            return Ok(new { access_token = token, token_type = "Bearer", expires_in = 3600 });
+            return Ok(new {
+                access_token = token, 
+                token_type = "Bearer", 
+                expires_in = config.GetValue<int>("jwtSettings:expiryInMinutes") * 60 
+            });
         }
         catch (Exception e)
         {

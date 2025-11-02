@@ -80,9 +80,10 @@ public static class Startup
                     ValidateAudience = true,
                     ValidateLifetime = true,
                     ValidateIssuerSigningKey = true,
-                    ValidIssuer = configurationManager.GetValue<string>("jwtsettings:issuer"),
-                    ValidAudience = configurationManager.GetValue<string>("jwtsettings:audience"),
-                    IssuerSigningKey = new SymmetricSecurityKey(System.Text.Encoding.UTF8.GetBytes(configurationManager.GetValue<string>("jwtsettings:key")!))
+                    ClockSkew = TimeSpan.FromSeconds(30),
+                    ValidIssuer = configurationManager.GetValue<string>("jwtSettings:issuer"),
+                    ValidAudience = configurationManager.GetValue<string>("jwtSettings:audience"),
+                    IssuerSigningKey = new SymmetricSecurityKey(System.Text.Encoding.UTF8.GetBytes(configurationManager.GetValue<string>("jwtSettings:key")!))
                 };
             });
         services.AddScoped<IClaimsTransformation, RoleClaimTransformer>();
@@ -101,7 +102,11 @@ public static class Startup
             options.GroupNameFormat = "'v'VVV";
             options.SubstituteApiVersionInUrl = true;
         });
-        services.AddOpenApi(opt => opt.AddDocumentTransformer<ClientCredentialsTransformer>());
+        services.AddOpenApi(opt =>
+        {
+            opt.AddDocumentTransformer<ClientCredentialsTransformer>();
+            opt.AddDocumentTransformer<TitleTransformer>();
+        });
         services.AddRouting(options => options.LowercaseUrls = true);
         services.AddControllers();
         services.AddOpenApi();
@@ -125,14 +130,11 @@ public static class Startup
         app.MapOpenApi();
         app.MapScalarApiReference(options => options
             .WithLayout(ScalarLayout.Classic)
+            .WithTitle("Greenfield Core API (" + app.Environment.EnvironmentName + ")")
             .AddPreferredSecuritySchemes("OAuth2")
             .AddClientCredentialsFlow("OAuth2", flow =>
                 {
                     flow.TokenUrl = "/api/v1.0/login/token";
-                    flow.AdditionalBodyParameters = new Dictionary<string, string>
-                    {
-                        { "client_name", "noahs-local-environment" }
-                    };
                 })
             .WithPersistentAuthentication()
         );

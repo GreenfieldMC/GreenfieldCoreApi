@@ -66,7 +66,7 @@ public class ClientAuthService(IUnitOfWork uow, IConfiguration config, ICacheSer
             Roles = roles
         });
         
-        return !isValid ? throw new Exception("Invalid credentials") : GenerateToken(clientId, roles);
+        return !isValid ? throw new Exception("Invalid credentials") : GenerateToken(clientId);
     }
 
     public async Task<IEnumerable<Client>> GetAllClients()
@@ -181,7 +181,6 @@ public class ClientAuthService(IUnitOfWork uow, IConfiguration config, ICacheSer
             if (addedRole) currentRoles.Add(role);
         }
 
-
         foreach (var role in rolesToRemove)
         {
             var removedRole = await repo.RemoveRoleFromClient(clientId, role);
@@ -270,9 +269,9 @@ public class ClientAuthService(IUnitOfWork uow, IConfiguration config, ICacheSer
         return (Convert.ToBase64String(actualHash), Convert.ToBase64String(actualSalt));
     }
 
-    private string GenerateToken(Guid clientId, List<string> roles)
+    private string GenerateToken(Guid clientId)
     {
-        var securityKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(config["jwtsettings:key"] ?? throw new ArgumentException("JWT key not found in configuration.")));
+        var securityKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(config.GetValue<string>("jwtSettings:key") ?? throw new ArgumentException("JWT key not found in configuration.")));
         var credentials = new SigningCredentials(securityKey, SecurityAlgorithms.HmacSha256);
         
         var claims = new[]
@@ -281,14 +280,12 @@ public class ClientAuthService(IUnitOfWork uow, IConfiguration config, ICacheSer
             new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
         };
         
-        //add the roles of the client as claims
-        var roleClaims = roles.Select(role => new Claim(ClaimTypes.Role, role));
-        claims = claims.Concat(roleClaims).ToArray();
-        
-        var token = new JwtSecurityToken(config["jwtsettings:issuer"],
-            config["jwtsettings:audience"],
+        var token = new JwtSecurityToken(
+            issuer: config.GetValue<string>("jwtSettings:issuer"),
+            audience: config.GetValue<string>("jwtSettings:audience"),
             claims: claims,
-            expires: DateTime.Now.AddMinutes(30),
+            notBefore: DateTime.UtcNow,
+            expires: DateTime.UtcNow.AddMinutes(config.GetValue<int>("jwtSettings:expiryInMinutes")),
             signingCredentials: credentials);
         
         return new JwtSecurityTokenHandler().WriteToken(token);

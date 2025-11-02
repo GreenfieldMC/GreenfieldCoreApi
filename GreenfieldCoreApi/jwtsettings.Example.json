@@ -2,6 +2,7 @@
   "jwtSettings": {
     "issuer": "YourIssuer",
     "audience": "YourAudience",
-    "key": "YourKey"
+    "key": "YourKey",
+    "expiryInMinutes": 30
   }
 }

@@ -19,7 +19,7 @@ public class UnitOfWork : IUnitOfWork
         _logger = logger;
         _serviceProvider = serviceProvider;
         _transactionScope = transactionScope;
-        _logger.LogDebug("Creating unit of work: {InstanceId}", _instanceId);
+        _logger.LogTrace("Creating unit of work: {InstanceId}", _instanceId);
     }
 
     /// <inheritdoc />
@@ -43,7 +43,7 @@ public class UnitOfWork : IUnitOfWork
     {
         if (Transaction is not null) throw new InvalidOperationException("Transaction already in progress.");
         _transactionScope.BeginTransaction();
-        _logger.LogDebug("Beginning transaction for unit of work: {InstanceId}", _instanceId);
+        _logger.LogTrace("Beginning transaction for unit of work: {InstanceId}", _instanceId);
     }
     
     /// <inheritdoc />
@@ -51,7 +51,7 @@ public class UnitOfWork : IUnitOfWork
     {
         if (Transaction is null) throw new InvalidOperationException("No transaction to commit.");
         if (!_completed) throw new InvalidOperationException("Transaction cannot be committed until unit of work is marked as complete.");
-        _logger.LogDebug("Committing transaction for unit of work: {InstanceId}", _instanceId);
+        _logger.LogTrace("Committing transaction for unit of work: {InstanceId}", _instanceId);
         try
         {
             Transaction!.Commit();
@@ -68,7 +68,7 @@ public class UnitOfWork : IUnitOfWork
     public void Rollback()
     {
         if (Transaction is null) return;
-        _logger.LogDebug("Rolling back transaction for unit of work: {InstanceId}", _instanceId);
+        _logger.LogTrace("Rolling back transaction for unit of work: {InstanceId}", _instanceId);
 
         try
         {
@@ -87,7 +87,7 @@ public class UnitOfWork : IUnitOfWork
     {
         if (Transaction is null) throw new InvalidOperationException("No active transaction to complete.");
         _completed = true;
-        _logger.LogDebug("Unit of work marked as complete: {InstanceId}", _instanceId);
+        _logger.LogTrace("Unit of work marked as complete: {InstanceId}", _instanceId);
     }
 
     /// <inheritdoc />
@@ -108,7 +108,7 @@ public class UnitOfWork : IUnitOfWork
                 {
                     try
                     {
-                        _logger.LogDebug("Disposing unit of work with completed transaction, committing: {InstanceId}", _instanceId);
+                        _logger.LogTrace("Disposing unit of work with completed transaction, committing: {InstanceId}", _instanceId);
                         Commit();
                     }
                     catch (Exception e)
@@ -127,7 +127,7 @@ public class UnitOfWork : IUnitOfWork
                 }
                 else
                 {
-                    _logger.LogDebug("Disposing unit of work with active but not completed transaction, rolling back: {InstanceId}", _instanceId);
+                    _logger.LogTrace("Disposing unit of work with active but not completed transaction, rolling back: {InstanceId}", _instanceId);
                     try
                     {
                         Rollback();
@@ -142,7 +142,7 @@ public class UnitOfWork : IUnitOfWork
         }
         finally
         {
-            _logger.LogDebug("Disposing unit of work: {InstanceId}", _instanceId);
+            _logger.LogTrace("Disposing unit of work: {InstanceId}", _instanceId);
             try
             {
                 Connection.Close();
