@@ -20,25 +20,19 @@ public interface IUserRepository
     Task<UserEntity?> GetUserByUuid(Guid minecraftUuid);
     
     /// <summary>
-    /// Create a new user
+    /// Create a new user. Returns the created UserEntity if an insert occurred, or null if no insert was performed.
     /// </summary>
     /// <param name="minecraftUuid">The Minecraft UUID of the user to create</param>
     /// <param name="minecraftUsername">The Minecraft username of the user to create</param>
-    /// <returns>The created UserEntity, or null if the user could not be created.</returns>
+    /// <returns>The created UserEntity, or null if no insert was performed.</returns>
     Task<UserEntity?> CreateUser(Guid minecraftUuid, string minecraftUsername);
     
     /// <summary>
-    /// Update a user's Minecraft username
+    /// Update a user's Minecraft username. Returns true if an update was performed, false otherwise.
     /// </summary>
     /// <param name="minecraftUuid">The Minecraft UUID of the user to update</param>
     /// <param name="newMinecraftUsername">The new Minecraft username to set</param>
-    /// <returns>The previously stored UserEntity, or null if no user was found with the given UUID.</returns>
-    Task<UserEntity?> UpdateUsername(Guid minecraftUuid, string newMinecraftUsername);
-    
-    /// <summary>
-    /// Gets the system user
-    /// </summary>
-    /// <returns>The system UserEntity, will throw an exception if the user was not found.</returns>
-    Task<UserEntity> GetSystemUser();
+    /// <returns>True if an update occurred, false otherwise.</returns>
+    Task<bool> UpdateUsername(Guid minecraftUuid, string newMinecraftUsername);
     
 }

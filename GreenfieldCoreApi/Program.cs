@@ -2,6 +2,7 @@ using GreenfieldCoreApi;
 
 var builder = WebApplication.CreateBuilder(args);
 
+builder.Services.ConfigureCaching();
 builder.Services.ConfigureServices();
 builder.Configuration.ConfigureConfiguration(builder.Environment);
 builder.Services.ConfigureDatabases();

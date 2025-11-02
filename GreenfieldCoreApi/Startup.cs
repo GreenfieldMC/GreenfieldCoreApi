@@ -1,12 +1,16 @@
 using System.Net;
 using Asp.Versioning;
+using GreenfieldCoreApi.Transformers;
 using GreenfieldCoreDataAccess.Database.Repositories;
 using GreenfieldCoreDataAccess.Database.Repositories.Interfaces;
 using GreenfieldCoreDataAccess.Database.ScriptManager;
 using GreenfieldCoreDataAccess.Database.UnitOfWork;
 using GreenfieldCoreServices.Commands;
+using GreenfieldCoreServices.Models.Clients;
 using GreenfieldCoreServices.Services;
+using GreenfieldCoreServices.Services.Caching;
 using GreenfieldCoreServices.Services.Interfaces;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.IdentityModel.Tokens;
@@ -30,6 +34,7 @@ public static class Startup
         services.AddScoped<ITransactionScope, TransactionScope>();
         services.AddTransient<IScriptManager, ScriptManager>();
         services.AddTransient<IClientRepository, ClientRepository>();
+        services.AddTransient<IUserRepository, UserRepository>();
     }
     
     internal static void ConfigureServices(this IServiceCollection services)
@@ -37,6 +42,11 @@ public static class Startup
         services.AddLogging(builder => builder.AddConsole());
         services.AddTransient<IUserService, UserService>();
         services.AddTransient<IClientAuthService, ClientAuthService>();
+    }
+
+    internal static void ConfigureCaching(this IServiceCollection services)
+    {
+        services.AddSingleton<ICacheService<Guid, Client>, ClientCacheService>();
     }
 
     internal static void ConfigureConfiguration(this IConfigurationBuilder configBuilder, IWebHostEnvironment env)
@@ -75,6 +85,7 @@ public static class Startup
                     IssuerSigningKey = new SymmetricSecurityKey(System.Text.Encoding.UTF8.GetBytes(configurationManager.GetValue<string>("jwtsettings:key")!))
                 };
             });
+        services.AddScoped<IClaimsTransformation, RoleClaimTransformer>();
         services.AddMvc();
     }
     

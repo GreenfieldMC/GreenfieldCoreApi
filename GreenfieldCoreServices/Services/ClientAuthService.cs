@@ -1,7 +1,7 @@
 using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
-using GreenfieldCoreDataAccess.Database.Models;
 using GreenfieldCoreDataAccess.Database.Repositories.Interfaces;
 using GreenfieldCoreDataAccess.Database.UnitOfWork;
 using GreenfieldCoreServices.Models.Clients;
@@ -11,7 +11,7 @@ using Microsoft.IdentityModel.Tokens;
 
 namespace GreenfieldCoreServices.Services;
 
-public class ClientAuthService(IUnitOfWork uow, IConfiguration config) : IClientAuthService
+public class ClientAuthService(IUnitOfWork uow, IConfiguration config, ICacheService<Guid, Client> cache) : IClientAuthService
 {
     
     public async Task<(Client client, string secret)> RegisterClient(string clientName, List<string> roles)
@@ -31,27 +31,40 @@ public class ClientAuthService(IUnitOfWork uow, IConfiguration config) : IClient
         }
         
         uow.CompleteAndCommit();
-        
-        return (new Client
+
+        var registeredClient = new Client
         {
             ClientId = newClient.Item1,
             ClientName = clientName,
             CreatedOn = newClient.Item2,
             Roles = assignedRoles
-        }, generatedSecret.secret);
+        };
+        
+        cache.SetValue(registeredClient.ClientId, registeredClient);
+        
+        return (registeredClient, generatedSecret.secret);
     }
 
     public async Task<string> AuthenticateLogin(Guid clientId, string clientSecret)
     {
         var repo = uow.Repository<IClientRepository>();
         var client = await repo.GetClientById(clientId);
-        var roles = (await repo.GetClientRoles(clientId)).Select(r => r.RoleName).ToList();
         
         if (client == null) throw new Exception("Client not found");
         
         var hashedSecret = HashClientSecret(clientSecret, client.Salt);
         
         var isValid = await repo.VerifyClientCredentials(clientId, hashedSecret.hash, hashedSecret.salt);
+
+        var roles = (await repo.GetClientRoles(clientId)).Select(r => r.RoleName).ToList();;
+        
+        cache.SetValue(client.ClientId, new Client
+        {
+            ClientId = client.ClientId,
+            ClientName = client.ClientName,
+            CreatedOn = client.CreatedOn,
+            Roles = roles
+        });
         
         return !isValid ? throw new Exception("Invalid credentials") : GenerateToken(clientId, roles);
     }
@@ -75,11 +88,15 @@ public class ClientAuthService(IUnitOfWork uow, IConfiguration config) : IClient
                 Roles = roles
             });
         }
+        
         return clients;
     }
 
     public async Task<Client?> GetClientById(Guid clientId)
     {
+        if (cache.TryGetValue(clientId, out var value))
+            return value;
+        
         var repo = uow.Repository<IClientRepository>();
         
         var foundClient = await repo.GetClientById(clientId);
@@ -89,17 +106,24 @@ public class ClientAuthService(IUnitOfWork uow, IConfiguration config) : IClient
         var roles = await repo.GetClientRoles(clientId);
         var roleNames = roles.Select(r => r.RoleName).ToList();
         
-        return new Client
+        var client = new Client
         {
             ClientId = foundClient.ClientId,
             ClientName = foundClient.ClientName,
             CreatedOn = foundClient.CreatedOn,
             Roles = roleNames
         };
+        
+        cache.SetValue(client.ClientId, client);
+        
+        return client;
     }
 
     public async Task<Client?> GetClientByName(string clientName)
     {
+        if (cache.TryGetValue(c => c.ClientName.Equals(clientName, StringComparison.OrdinalIgnoreCase), out var cachedClient))
+            return cachedClient;
+        
         var repo = uow.Repository<IClientRepository>();
         
         var foundClient = await repo.GetClientByName(clientName);
@@ -109,13 +133,17 @@ public class ClientAuthService(IUnitOfWork uow, IConfiguration config) : IClient
         var roles = await repo.GetClientRoles(foundClient.ClientId);
         var roleNames = roles.Select(r => r.RoleName).ToList();
         
-        return new Client
+        var client = new Client
         {
             ClientId = foundClient.ClientId,
             ClientName = foundClient.ClientName,
             CreatedOn = foundClient.CreatedOn,
             Roles = roleNames
         };
+        
+        cache.SetValue(client.ClientId, client);
+        
+        return client;
     }
 
     public async Task<Client?> DeleteClient(Guid clientId)
@@ -129,6 +157,8 @@ public class ClientAuthService(IUnitOfWork uow, IConfiguration config) : IClient
         if (!deleteTask) return null;
         
         uow.CompleteAndCommit();
+        
+        cache.RemoveValue(clientId);
         
         return foundClient;
     }
@@ -162,6 +192,8 @@ public class ClientAuthService(IUnitOfWork uow, IConfiguration config) : IClient
         
         foundClient.Roles = currentRoles;
         
+        cache.SetValue(foundClient.ClientId, foundClient);
+        
         return foundClient;
     }
 
@@ -194,6 +226,9 @@ public class ClientAuthService(IUnitOfWork uow, IConfiguration config) : IClient
         uow.CompleteAndCommit();
         
         foundClient.ClientName = newName;
+        
+        cache.SetValue(foundClient.ClientId, foundClient);
+        
         return foundClient;
     }
 
@@ -213,6 +248,9 @@ public class ClientAuthService(IUnitOfWork uow, IConfiguration config) : IClient
         if (foundClient.Roles.Count != removalCount) return await GetClientById(clientId);
         
         foundClient.Roles.Clear();
+        
+        cache.SetValue(foundClient.ClientId, foundClient);
+        
         return foundClient;
     }
 
@@ -239,12 +277,12 @@ public class ClientAuthService(IUnitOfWork uow, IConfiguration config) : IClient
         
         var claims = new[]
         {
-            new System.Security.Claims.Claim(JwtRegisteredClaimNames.Sub, clientId.ToString()),
-            new System.Security.Claims.Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
+            new Claim(ClaimTypes.NameIdentifier, clientId.ToString()),
+            new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
         };
         
         //add the roles of the client as claims
-        var roleClaims = roles.Select(role => new System.Security.Claims.Claim("role", role));
+        var roleClaims = roles.Select(role => new Claim(ClaimTypes.Role, role));
         claims = claims.Concat(roleClaims).ToArray();
         
         var token = new JwtSecurityToken(config["jwtsettings:issuer"],

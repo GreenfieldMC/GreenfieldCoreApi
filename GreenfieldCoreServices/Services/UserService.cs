@@ -1,54 +1,55 @@
-using GreenfieldCoreServices.Models;
+using GreenfieldCoreDataAccess.Database.Models;
+using GreenfieldCoreDataAccess.Database.Repositories.Interfaces;
+using GreenfieldCoreDataAccess.Database.UnitOfWork;
 using GreenfieldCoreServices.Models.Users;
 using GreenfieldCoreServices.Services.Interfaces;
-using static GreenfieldCoreServices.Models.Result<GreenfieldCoreServices.Models.Users.User?>;
 
 namespace GreenfieldCoreServices.Services;
 
-public class UserService : IUserService
+public class UserService(IUnitOfWork uow) : IUserService
 {
-    public Task<Result<User?>> CreateUser(Guid minecraftUuid, string username)
+    public async Task<User> CreateOrGetUser(Guid minecraftUuid, string username)
     {
-        return Task.FromResult(Ok(new User
-        {
-            UserId = 1,
-            MinecraftUuid = minecraftUuid,
-            Username = username,
-            DisplayName = "displayName"
-        }));
+        var repo = uow.Repository<IUserRepository>();
+        
+        var foundUser = await repo.GetUserByUuid(minecraftUuid);
+        if (foundUser is not null) return User.FromDbModel(foundUser);
+        
+        uow.BeginTransaction();
+        foundUser = await repo.CreateUser(minecraftUuid, username);
+        if (foundUser is null)
+            throw new Exception("Failed to create user");
+        uow.CompleteAndCommit();
+
+        return User.FromDbModel(foundUser);
     }
 
-    public Task<Result<User?>> GetUser(Guid minecraftUuid)
+    public async Task<User?> GetUserByUuid(Guid minecraftUuid)
     {
-        return Task.FromResult(Ok(new User
-        {
-            UserId = 1,
-            MinecraftUuid = minecraftUuid,
-            Username = "TestUser",
-            DisplayName = "Test User"
-        }));
+        var repo = uow.Repository<IUserRepository>();
+        var foundUser = await repo.GetUserByUuid(minecraftUuid);
+        
+        return foundUser is null ? null : User.FromDbModel(foundUser);
     }
 
-    public Task<Result<IEnumerable<User>>> FindUser(string username)
+    public Task<User?> GetUserByUserId(long userId)
     {
-        var users = new List<User>
-        {
-            new User
-            {
-                UserId = 1,
-                MinecraftUuid = Guid.NewGuid(),
-                Username = username,
-                DisplayName = "Test User 1"
-            },
-            new User
-            {
-                UserId = 2,
-                MinecraftUuid = Guid.NewGuid(),
-                Username = username,
-                DisplayName = "Test User 2"
-            }
-        };
+        var repo = uow.Repository<IUserRepository>();
+        return repo.GetUserByUserId(userId).ContinueWith(t =>
+            t.Result is null ? null : User.FromDbModel(t.Result));
+    }
 
-        return Task.FromResult(Result<IEnumerable<User>>.Ok(users));
+    public async Task<User?> UpdateUsername(Guid minecraftUuid, string newUsername)
+    {
+        var repo = uow.Repository<IUserRepository>();
+        uow.BeginTransaction();
+        if (await repo.UpdateUsername(minecraftUuid, newUsername))
+        {
+            var updatedUser = await repo.GetUserByUuid(minecraftUuid);
+            uow.CompleteAndCommit();
+            return updatedUser is null ? null : User.FromDbModel(updatedUser);
+        }
+        uow.Rollback();
+        return null;
     }
 }

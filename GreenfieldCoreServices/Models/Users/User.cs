@@ -1,6 +1,8 @@
+using GreenfieldCoreDataAccess.Database.Models;
+
 namespace GreenfieldCoreServices.Models.Users;
 
-public class User
+public class User : IDbModelConvertable<UserEntity, User>
 {
     
     /// <summary>
@@ -19,8 +21,18 @@ public class User
     public required string Username { get; set; }
     
     /// <summary>
-    /// This user's last known username
+    /// The date and time this user was created
     /// </summary>
-    public string? DisplayName { get; set; }
-    
+    public required DateTime CreatedOn { get; set; }
+
+    public static User FromDbModel(UserEntity from)
+    {
+        return new User
+        {
+            UserId = from.UserId,
+            MinecraftUuid = from.MinecraftUuid,
+            Username = from.MinecraftUsername,
+            CreatedOn = from.CreatedOn
+        };
+    }
 }
