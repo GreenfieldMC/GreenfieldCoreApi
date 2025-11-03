@@ -16,22 +16,16 @@ public class LoginController(IClientAuthService clientAuthService, IConfiguratio
     [AllowAnonymous]
     [HttpPost("token")]
     [Consumes("application/x-www-form-urlencoded", "multipart/form-data")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
     [Produces("application/json")]
     public async Task<IActionResult> Token([FromForm] TokenRequest request)
     {
-        try
-        {
-            var token = await clientAuthService.AuthenticateLogin(request.client_id, request.client_secret);
-            return Ok(new {
-                access_token = token, 
-                token_type = "Bearer", 
-                expires_in = config.GetValue<int>("jwtSettings:expiryInMinutes") * 60 
-            });
-        }
-        catch (Exception e)
-        {
-            return Unauthorized(e.Message);
-        }
+        var token = await clientAuthService.AuthenticateLogin(request.client_id, request.client_secret);
+        return Ok(new {
+            access_token = token, 
+            token_type = "Bearer", 
+            expires_in = config.GetValue<int>("jwtSettings:expiryInMinutes") * 60 
+        });
     }
     
     public record TokenRequest(Guid client_id, string client_secret, string grant_type);

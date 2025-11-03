@@ -7,12 +7,12 @@ public interface IUserService
 {
     
     /// <summary>
-    /// Creates a new user or retrieves an existing one based on their Minecraft UUID.
+    /// Creates a new user.
     /// </summary>
-    /// <param name="minecraftUuid">The Minecraft UUID of the user to create or retrieve</param>
-    /// <param name="username">The Minecraft username of the user to create or retrieve</param>
-    /// <returns>>The created or retrieved User.</returns>
-    public Task<User> CreateOrGetUser(Guid minecraftUuid, string username);
+    /// <param name="minecraftUuid">The Minecraft UUID of the user to create</param>
+    /// <param name="username">The Minecraft username of the user to create</param>
+    /// <returns>The created User if an insert occurred; null if the user already exists or could not be created.</returns>
+    public Task<User?> CreateUser(Guid minecraftUuid, string username);
     
     /// <summary>
     /// Get a user by their Minecraft UUID
@@ -33,7 +33,7 @@ public interface IUserService
     /// </summary>
     /// <param name="minecraftUuid">The Minecraft UUID of the user to update</param>
     /// <param name="newUsername">The new Minecraft username to set</param>
-    /// <returns>>The updated User if an update was performed, or null otherwise.</returns>
+    /// <returns>The updated User if an update was performed, or null otherwise.</returns>
     public Task<User?> UpdateUsername(Guid minecraftUuid, string newUsername);
 
 }

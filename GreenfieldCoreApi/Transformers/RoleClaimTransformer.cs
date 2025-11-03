@@ -20,16 +20,11 @@ public class RoleClaimTransformer : IClaimsTransformation
     
     public async Task<ClaimsPrincipal> TransformAsync(ClaimsPrincipal principal)
     {
-        Console.WriteLine("Transforming claims for principal: ");
         if (principal.Identity is not ClaimsIdentity { IsAuthenticated: true } ci)
             return principal;
-        Console.WriteLine($"Claims for principal: {ci.Name}");
         var subClaim = principal.FindFirst(ClaimTypes.NameIdentifier);
-        Console.WriteLine($"Found sub claim: {subClaim?.Value}");
         if (subClaim == null || !Guid.TryParse(subClaim.Value, out var clientId))
             return principal;
-        
-        Console.WriteLine($"Claims for sub: {subClaim.Value}");
         
         if (!_clientCache.TryGetValue(clientId, out var client))
         {
@@ -51,8 +46,6 @@ public class RoleClaimTransformer : IClaimsTransformation
         
         foreach (var role in roles)
             newIdentity.AddClaim(new Claim(ClaimTypes.Role, role));
-        
-        Console.WriteLine("Roles: " + string.Join(", ", roles));
         
         return new ClaimsPrincipal(newIdentity);
     }

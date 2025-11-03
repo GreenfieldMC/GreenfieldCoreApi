@@ -1,4 +1,5 @@
 using Asp.Versioning;
+using GreenfieldCoreApi.ApiModels;
 using GreenfieldCoreServices.Services.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -17,6 +18,7 @@ public class UserController(IUserService userService) : ControllerBase
     [Authorize(Roles = "Users.Read")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [Produces(typeof(GreenfieldCoreServices.Models.Users.User))]
     public async Task<IActionResult> GetUserByUuid([FromQuery] Guid minecraftUuid)
     {
         var user = await userService.GetUserByUuid(minecraftUuid);
@@ -29,33 +31,46 @@ public class UserController(IUserService userService) : ControllerBase
     [Authorize(Roles = "Users.Read")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [Produces(typeof(GreenfieldCoreServices.Models.Users.User))]
     public async Task<IActionResult> GetUserByUserId([FromQuery] long userId)
     {
         var user = await userService.GetUserByUserId(userId);
-        if (user is null)
-            return NotFound("User not found");
-        return Ok(user);
+        return user is null 
+            ? Problem(statusCode: StatusCodes.Status404NotFound, detail: "User not found") 
+            : Ok(user);
     }
     
     [HttpPatch("updateUsername")]
     [Authorize(Roles = "Users.Write")]
     [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> UpdateUsername([FromBody] Guid minecraftUuid, string newUsername) 
+    [Produces(typeof(GreenfieldCoreServices.Models.Users.User))]
+    public async Task<IActionResult> UpdateUsername([FromBody] UserRequest request) 
     {
-        var updatedUser = await userService.UpdateUsername(minecraftUuid, newUsername);
-        if (updatedUser is null)
-            return NotFound("User not found or username not updated");
-        return Ok(updatedUser);
+        if (string.IsNullOrWhiteSpace(request.Username))
+            return BadRequest("A valid minecraftUuid and username are required");
+        var updatedUser = await userService.UpdateUsername(request.MinecraftUuid, request.Username);
+        return updatedUser is null 
+            ? Problem(statusCode: StatusCodes.Status404NotFound, detail: "User not found or username not updated") 
+            : Ok(updatedUser);
     }
 
-    [HttpPost("createOrGetUser")]
+    [HttpPost("createUser")]
     [Authorize(Roles = "Users.Write")]
-    [ProducesResponseType(StatusCodes.Status200OK)]
-    public async Task<IActionResult> CreateOrGetUser([FromBody] Guid minecraftUuid, string username)
+    [ProducesResponseType(StatusCodes.Status201Created)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [Produces(typeof(GreenfieldCoreServices.Models.Users.User))]
+    public async Task<IActionResult> CreateUser([FromBody] UserRequest request)
     {
-        var user = await userService.CreateOrGetUser(minecraftUuid, username);
-        return Ok(user);
+        if (string.IsNullOrWhiteSpace(request.Username))
+            return Problem(statusCode: StatusCodes.Status400BadRequest, detail: "A valid minecraftUuid and username are required");
+        var created = await userService.CreateUser(request.MinecraftUuid, request.Username);
+        
+        return created is null 
+            ? Problem(statusCode: StatusCodes.Status409Conflict, detail: "User already exists or could not be created") 
+            : CreatedAtAction(nameof(GetUserByUuid), new { version = HttpContext.GetRequestedApiVersion()?.ToString(), minecraftUuid = created.MinecraftUuid }, created);
     }
     
 }

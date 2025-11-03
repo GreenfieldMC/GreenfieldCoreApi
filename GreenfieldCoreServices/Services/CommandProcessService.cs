@@ -98,6 +98,7 @@ public class CommandProcessService(ILogger<ICommandProcessService> logger, IServ
                     try
                     {
                         await ExecuteCommand(line);
+                        Console.Write("\r> ");
                     }
                     catch (OperationCanceledException)
                     {
@@ -110,7 +111,6 @@ public class CommandProcessService(ILogger<ICommandProcessService> logger, IServ
                 }, _stoppingToken);
 
                 _runningTasks.Add(commandTask);
-                Console.Write("> ");
             }
 
             logger.LogDebug("Command loop stopping. Waiting for running commands to complete...");

@@ -1,19 +1,33 @@
 using GreenfieldCoreApi;
+using Serilog;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.ConfigureCaching();
-builder.Services.ConfigureServices();
 builder.Configuration.ConfigureConfiguration(builder.Environment);
-builder.Services.ConfigureDatabases();
-builder.Services.ConfigureWebServices();
-builder.Services.ConfigureAuthentication(builder.Configuration);
-builder.Services.ConfigureCommandServices();
+builder.ConfigureSerilog();
 
-var app = builder.Build();
+try
+{
+    builder.Services.ConfigureCaching();
+    builder.Services.ConfigureServices();
+    builder.Services.ConfigureDatabases();
+    builder.Services.ConfigureWebServices();
+    builder.Services.ConfigureAuthentication(builder.Configuration);
+    builder.Services.ConfigureCommandServices();
 
-await app.Services.PerformDatabaseMigrations();
+    var app = builder.Build();
 
-app.ConfigureWebApplication();
+    await app.Services.PerformDatabaseMigrations();
 
-app.Run();
+    app.ConfigureWebApplication();
+
+    app.Run();   
+} 
+catch (Exception ex)
+{
+    Log.Fatal(ex, "Program terminated unexpectedly");
+}
+finally
+{
+    Log.CloseAndFlush();
+}

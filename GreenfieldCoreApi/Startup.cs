@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Net;
 using Asp.Versioning;
 using GreenfieldCoreApi.Transformers;
@@ -12,14 +13,31 @@ using GreenfieldCoreServices.Services.Caching;
 using GreenfieldCoreServices.Services.Interfaces;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.AspNetCore.Mvc.Infrastructure;
 using Microsoft.IdentityModel.Tokens;
 using Scalar.AspNetCore;
+using Serilog;
+using Serilog.Events;
+using ILogger = Microsoft.Extensions.Logging.ILogger;
 
 namespace GreenfieldCoreApi;
 
 public static class Startup
 {
+    
+    internal static void ConfigureSerilog(this WebApplicationBuilder builder)
+    {
+        Log.Logger = new LoggerConfiguration()
+            .Enrich.FromLogContext()
+            // .WriteTo.Console()
+            // .WriteTo.Debug()
+            .ReadFrom.Configuration(builder.Configuration)
+            .CreateLogger();
+        
+        builder.Host.UseSerilog(Log.Logger);
+    }
     
     internal static async Task PerformDatabaseMigrations(this IServiceProvider serviceProvider)
     {
@@ -141,6 +159,34 @@ public static class Startup
         app.UseAuthentication();
         app.UseAuthorization();
         app.UseHttpsRedirection();
+
+        app.UseExceptionHandler(errorApp =>
+        {
+            errorApp.Run(async context =>
+            {
+                var problemFactory = context.RequestServices.GetRequiredService<ProblemDetailsFactory>();
+                var globalLogger = context.RequestServices.GetRequiredService<ILoggerFactory>().CreateLogger("GlobalExceptionHandler");
+                var exceptionHandlerPathFeature = context.Features.Get<IExceptionHandlerPathFeature>();
+
+                var traceId = Activity.Current?.Id ?? context.TraceIdentifier;
+                
+                var problemDetails = problemFactory.CreateProblemDetails(
+                    context,
+                    statusCode: StatusCodes.Status500InternalServerError,
+                    title: "An internal server error has occurred!",
+                    detail: "A technical error occurred in the server. Please contact support with the trace ID.",
+                    instance: exceptionHandlerPathFeature?.Path
+                );
+                problemDetails.Extensions["traceId"] = traceId;
+                globalLogger.LogError("An unhandled exception occurred. Trace ID: {TraceId}", traceId);
+
+                context.Response.StatusCode = problemDetails.Status ?? StatusCodes.Status500InternalServerError;
+                context.Response.ContentType = "application/problem+json";
+
+                await context.Response.WriteAsJsonAsync(problemDetails);
+            });
+        });
+        
         app.MapControllers();
     }
     
