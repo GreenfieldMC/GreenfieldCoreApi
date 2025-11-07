@@ -21,12 +21,12 @@ public class ClientAuthService(IUnitOfWork uow, IConfiguration config, ICacheSer
         uow.BeginTransaction();
         var repo = uow.Repository<IClientRepository>();
         
-        var newClient = await repo.RegisterClient(clientName, generatedSecret.hashedSecret, generatedSecret.salt);
+        var newClient = (await repo.RegisterClient(clientName, generatedSecret.hashedSecret, generatedSecret.salt)).GetOrThrow();
 
         var assignedRoles = new List<string>();
         foreach (var role in roles)
         {
-            var assignedRole = await repo.AssignRoleToClient(newClient.Item1, role);
+            var assignedRole = (await repo.AssignRoleToClient(newClient.Item1, role)).GetOrThrow();
             if (assignedRole) assignedRoles.Add(role);
         }
         
@@ -48,15 +48,15 @@ public class ClientAuthService(IUnitOfWork uow, IConfiguration config, ICacheSer
     public async Task<string> AuthenticateLogin(Guid clientId, string clientSecret)
     {
         var repo = uow.Repository<IClientRepository>();
-        var client = await repo.GetClientById(clientId);
+        var client = (await repo.GetClientById(clientId)).GetOrThrow();
         
-        if (client == null) throw new Exception("Client not found");
+        if (client is null) throw new Exception("Client not found");
         
         var hashedSecret = HashClientSecret(clientSecret, client.Salt);
         
-        var isValid = await repo.VerifyClientCredentials(clientId, hashedSecret.hash, hashedSecret.salt);
+        var isValid = (await repo.VerifyClientCredentials(clientId, hashedSecret.hash, hashedSecret.salt)).GetOrThrow();
 
-        var roles = (await repo.GetClientRoles(clientId)).Select(r => r.RoleName).ToList();;
+        var roles = (await repo.GetClientRoles(clientId)).GetOrThrow().Select(r => r.RoleName).ToList();
         
         cache.SetValue(client.ClientId, new Client
         {
@@ -73,13 +73,13 @@ public class ClientAuthService(IUnitOfWork uow, IConfiguration config, ICacheSer
     {
         var repo = uow.Repository<IClientRepository>();
 
-        var foundClients = await repo.GetAllClients();
+        var foundClients = (await repo.GetAllClients()).GetOrThrow();
         
         var clients = new List<Client>();
         
         foreach (var client in foundClients)
         {
-            var roles = (await repo.GetClientRoles(client.ClientId)).Select(r => r.RoleName).ToList();
+            var roles = (await repo.GetClientRoles(client.ClientId)).GetOrThrow().Select(r => r.RoleName).ToList();
             clients.Add(new Client
             {
                 ClientId = client.ClientId,
@@ -99,12 +99,12 @@ public class ClientAuthService(IUnitOfWork uow, IConfiguration config, ICacheSer
         
         var repo = uow.Repository<IClientRepository>();
         
-        var foundClient = await repo.GetClientById(clientId);
+        var foundClient = (await repo.GetClientById(clientId)).GetOrThrow();
         
         if (foundClient == null) return null;
         
         var roles = await repo.GetClientRoles(clientId);
-        var roleNames = roles.Select(r => r.RoleName).ToList();
+        var roleNames = roles.GetOrThrow().Select(r => r.RoleName).ToList();
         
         var client = new Client
         {
@@ -126,12 +126,12 @@ public class ClientAuthService(IUnitOfWork uow, IConfiguration config, ICacheSer
         
         var repo = uow.Repository<IClientRepository>();
         
-        var foundClient = await repo.GetClientByName(clientName);
+        var foundClient = (await repo.GetClientByName(clientName)).GetOrThrow();
         
         if (foundClient == null) return null;
         
         var roles = await repo.GetClientRoles(foundClient.ClientId);
-        var roleNames = roles.Select(r => r.RoleName).ToList();
+        var roleNames = roles.GetOrThrow().Select(r => r.RoleName).ToList();
         
         var client = new Client
         {
@@ -152,9 +152,9 @@ public class ClientAuthService(IUnitOfWork uow, IConfiguration config, ICacheSer
         if (foundClient == null) return null;
         
         uow.BeginTransaction();
-        var deleteTask = await uow.Repository<IClientRepository>().DeleteClient(clientId);
+        var deleted = (await uow.Repository<IClientRepository>().DeleteClient(clientId)).GetOrThrow();
         
-        if (!deleteTask) return null;
+        if (!deleted) return null;
         
         uow.CompleteAndCommit();
         
@@ -177,13 +177,13 @@ public class ClientAuthService(IUnitOfWork uow, IConfiguration config, ICacheSer
         
         foreach (var role in rolesToAdd)
         {
-            var addedRole = await repo.AssignRoleToClient(clientId, role);
+            var addedRole = (await repo.AssignRoleToClient(clientId, role)).GetOrThrow();
             if (addedRole) currentRoles.Add(role);
         }
 
         foreach (var role in rolesToRemove)
         {
-            var removedRole = await repo.RemoveRoleFromClient(clientId, role);
+            var removedRole = (await repo.RemoveRoleFromClient(clientId, role)).GetOrThrow();
             if (removedRole) currentRoles.Remove(role);
         }
         
@@ -219,7 +219,7 @@ public class ClientAuthService(IUnitOfWork uow, IConfiguration config, ICacheSer
         
         uow.BeginTransaction();
         
-        var updateResult = await uow.Repository<IClientRepository>().UpdateClientName(clientId, newName);
+        var updateResult = (await uow.Repository<IClientRepository>().UpdateClientName(clientId, newName)).GetOrThrow();
         if (!updateResult) return null;
         
         uow.CompleteAndCommit();
@@ -238,7 +238,7 @@ public class ClientAuthService(IUnitOfWork uow, IConfiguration config, ICacheSer
         
         uow.BeginTransaction();
         
-        var removalCount = await uow.Repository<IClientRepository>().ClearClientRoles(clientId);
+        var removalCount = (await uow.Repository<IClientRepository>().ClearClientRoles(clientId)).GetOrThrow();
         
         if (removalCount == 0) return null;
         
