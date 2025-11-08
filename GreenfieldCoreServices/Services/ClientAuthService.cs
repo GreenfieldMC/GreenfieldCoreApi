@@ -48,15 +48,13 @@ public class ClientAuthService(IUnitOfWork uow, IConfiguration config, ICacheSer
     public async Task<string> AuthenticateLogin(Guid clientId, string clientSecret)
     {
         var repo = uow.Repository<IClientRepository>();
-        var client = (await repo.GetClientById(clientId)).GetOrThrow();
-        
-        if (client is null) throw new Exception("Client not found");
+        var client = (await repo.GetClientById(clientId)).GetNonNullOrThrow(nullDataMessage: "Client not found.");
         
         var hashedSecret = HashClientSecret(clientSecret, client.Salt);
         
         var isValid = (await repo.VerifyClientCredentials(clientId, hashedSecret.hash, hashedSecret.salt)).GetOrThrow();
 
-        var roles = (await repo.GetClientRoles(clientId)).GetOrThrow().Select(r => r.RoleName).ToList();
+        var roles = (await repo.GetClientRoles(clientId)).GetNonNullOrThrow().Select(r => r.RoleName).ToList();
         
         cache.SetValue(client.ClientId, new Client
         {
@@ -73,13 +71,13 @@ public class ClientAuthService(IUnitOfWork uow, IConfiguration config, ICacheSer
     {
         var repo = uow.Repository<IClientRepository>();
 
-        var foundClients = (await repo.GetAllClients()).GetOrThrow();
+        var foundClients = (await repo.GetAllClients()).GetNonNullOrThrow();
         
         var clients = new List<Client>();
         
         foreach (var client in foundClients)
         {
-            var roles = (await repo.GetClientRoles(client.ClientId)).GetOrThrow().Select(r => r.RoleName).ToList();
+            var roles = (await repo.GetClientRoles(client.ClientId)).GetNonNullOrThrow().Select(r => r.RoleName).ToList();
             clients.Add(new Client
             {
                 ClientId = client.ClientId,
@@ -104,7 +102,7 @@ public class ClientAuthService(IUnitOfWork uow, IConfiguration config, ICacheSer
         if (foundClient == null) return null;
         
         var roles = await repo.GetClientRoles(clientId);
-        var roleNames = roles.GetOrThrow().Select(r => r.RoleName).ToList();
+        var roleNames = roles.GetNonNullOrThrow().Select(r => r.RoleName).ToList();
         
         var client = new Client
         {
@@ -131,7 +129,7 @@ public class ClientAuthService(IUnitOfWork uow, IConfiguration config, ICacheSer
         if (foundClient == null) return null;
         
         var roles = await repo.GetClientRoles(foundClient.ClientId);
-        var roleNames = roles.GetOrThrow().Select(r => r.RoleName).ToList();
+        var roleNames = roles.GetNonNullOrThrow().Select(r => r.RoleName).ToList();
         
         var client = new Client
         {

@@ -7,6 +7,7 @@ using GreenfieldCoreDataAccess.Database.Repositories.Interfaces;
 using GreenfieldCoreDataAccess.Database.ScriptManager;
 using GreenfieldCoreDataAccess.Database.UnitOfWork;
 using GreenfieldCoreServices.Commands;
+using GreenfieldCoreServices.Models.BuildCodes;
 using GreenfieldCoreServices.Models.Clients;
 using GreenfieldCoreServices.Services;
 using GreenfieldCoreServices.Services.Caching;
@@ -53,6 +54,7 @@ public static class Startup
         services.AddTransient<IScriptManager, ScriptManager>();
         services.AddTransient<IClientRepository, ClientRepository>();
         services.AddTransient<IUserRepository, UserRepository>();
+        services.AddTransient<IBuildCodeRepository, BuildCodeRepository>();
     }
     
     internal static void ConfigureServices(this IServiceCollection services)
@@ -60,11 +62,13 @@ public static class Startup
         services.AddLogging(builder => builder.AddConsole());
         services.AddTransient<IUserService, UserService>();
         services.AddTransient<IClientAuthService, ClientAuthService>();
+        services.AddTransient<IBuildCodeService, BuildCodeService>();
     }
 
     internal static void ConfigureCaching(this IServiceCollection services)
     {
         services.AddSingleton<ICacheService<Guid, Client>, ClientCacheService>();
+        services.AddSingleton<ICacheService<long, BuildCode>, BuildCodeCacheService>();
     }
 
     internal static void ConfigureConfiguration(this IConfigurationBuilder configBuilder, IWebHostEnvironment env)

@@ -7,8 +7,9 @@ public interface IBuildCodeService
     /// <summary>
     /// Gets all build codes.
     /// </summary>
+    /// <param name="showDeleted"></param>
     /// <returns>A list of all build codes.</returns>
-    Task<IEnumerable<BuildCode>> GetAllBuildCodes();
+    Task<IEnumerable<BuildCode>> GetAllBuildCodes(bool showDeleted = false);
     
     /// <summary>
     /// Gets a build code by its unique identifier.

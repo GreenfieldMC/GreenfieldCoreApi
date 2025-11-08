@@ -22,9 +22,9 @@ public class UserController(IUserService userService) : ControllerBase
     public async Task<IActionResult> GetUserByUuid([FromQuery] Guid minecraftUuid)
     {
         var user = await userService.GetUserByUuid(minecraftUuid);
-        if (user is null)
-            return NotFound("User not found");
-        return Ok(user);
+        return user is null 
+            ? Problem(statusCode: StatusCodes.Status404NotFound, detail: "User not found") 
+            : Ok(user);
     }
     
     [HttpGet("userByUserId")]
@@ -49,7 +49,7 @@ public class UserController(IUserService userService) : ControllerBase
     public async Task<IActionResult> UpdateUsername([FromBody] UserRequest request) 
     {
         if (string.IsNullOrWhiteSpace(request.Username))
-            return BadRequest("A valid minecraftUuid and username are required");
+            return Problem(statusCode: StatusCodes.Status400BadRequest, detail: "A valid minecraftUuid and username are required");
         var updatedUser = await userService.UpdateUsername(request.MinecraftUuid, request.Username);
         return updatedUser is null 
             ? Problem(statusCode: StatusCodes.Status404NotFound, detail: "User not found or username not updated") 
