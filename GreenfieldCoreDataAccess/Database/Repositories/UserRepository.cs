@@ -14,31 +14,31 @@ public class UserRepository(IUnitOfWork uow) : BaseRepository(uow), IUserReposit
     private const string SelectUserByUuidProc = "usp_SelectUserByUuid";
     private const string UpdateUsernameProc = "usp_UpdateUsername";
     
-    public async Task<DbResult<UserEntity?>> GetUserByUserId(long userId)
+    public async Task<Result<UserEntity?>> GetUserByUserId(long userId)
     {
         var parameters = new DynamicParameters();
         parameters.Add("p_UserId", userId, DbType.Int64);
         try {
             var result = await Connection.QuerySingleOrDefaultAsync<UserEntity?>(SelectUserByUserIdProc, parameters, commandType: CommandType.StoredProcedure, transaction: Transaction);
-            return DbResult<UserEntity?>.Success(result);
+            return Result<UserEntity?>.Success(result);
         } catch (DbException ex) {
-            return DbResult<UserEntity?>.Failure($"Failed to get user by ID: {ex.Message}");
+            return Result<UserEntity?>.Failure($"Failed to get user by ID: {ex.Message}");
         }
     }
 
-    public async Task<DbResult<UserEntity?>> GetUserByUuid(Guid minecraftUuid)
+    public async Task<Result<UserEntity?>> GetUserByUuid(Guid minecraftUuid)
     {
         var parameters = new DynamicParameters();
         parameters.Add("u_MinecraftUuid", minecraftUuid, DbType.Guid);
         try {
             var result = await Connection.QuerySingleOrDefaultAsync<UserEntity?>(SelectUserByUuidProc, parameters, commandType: CommandType.StoredProcedure, transaction: Transaction);
-            return DbResult<UserEntity?>.Success(result);
+            return Result<UserEntity?>.Success(result);
         } catch (DbException ex) {
-            return DbResult<UserEntity?>.Failure($"Failed to get user by UUID: {ex.Message}");
+            return Result<UserEntity?>.Failure($"Failed to get user by UUID: {ex.Message}");
         }
     }
 
-    public async Task<DbResult<UserEntity?>> CreateUser(Guid minecraftUuid, string minecraftUsername)
+    public async Task<Result<UserEntity?>> CreateUser(Guid minecraftUuid, string minecraftUsername)
     {
         var parameters = new DynamicParameters();
         parameters.Add("p_MinecraftUuid", minecraftUuid, DbType.Guid);
@@ -49,22 +49,22 @@ public class UserRepository(IUnitOfWork uow) : BaseRepository(uow), IUserReposit
                 parameters,
                 commandType: CommandType.StoredProcedure,
                 transaction: Transaction);
-            return DbResult<UserEntity?>.Success(result);
+            return Result<UserEntity?>.Success(result);
         } catch (DbException ex) {
-            return DbResult<UserEntity?>.Failure($"Failed to create user: {ex.Message}");
+            return Result<UserEntity?>.Failure($"Failed to create user: {ex.Message}");
         }
     }
 
-    public async Task<DbResult<bool>> UpdateUsername(Guid minecraftUuid, string newMinecraftUsername)
+    public async Task<Result<bool>> UpdateUsername(Guid minecraftUuid, string newMinecraftUsername)
     {
         var parameters = new DynamicParameters();
         parameters.Add("p_MinecraftUuid", minecraftUuid, DbType.Guid);
         parameters.Add("p_NewUsername", newMinecraftUsername, DbType.String, size: 16);
         try {
             var rows = await Connection.ExecuteAsync(UpdateUsernameProc, parameters, commandType: CommandType.StoredProcedure, transaction: Transaction);
-            return DbResult<bool>.Success(rows > 0);
+            return Result<bool>.Success(rows > 0);
         } catch (DbException ex) {
-            return DbResult<bool>.Failure($"Failed to update username: {ex.Message}");
+            return Result<bool>.Failure($"Failed to update username: {ex.Message}");
         }
     }
 }

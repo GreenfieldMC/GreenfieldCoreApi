@@ -21,10 +21,11 @@ public class UserController(IUserService userService) : ControllerBase
     [Produces(typeof(GreenfieldCoreServices.Models.Users.User))]
     public async Task<IActionResult> GetUserByUuid([FromQuery] Guid minecraftUuid)
     {
-        var user = await userService.GetUserByUuid(minecraftUuid);
-        return user is null 
-            ? Problem(statusCode: StatusCodes.Status404NotFound, detail: "User not found") 
-            : Ok(user);
+        var userResult = await userService.GetUserByUuid(minecraftUuid);
+        if (!userResult.IsSuccessful)
+            return Problem(statusCode: userResult.GetStatusCodeInt(), detail: userResult.ErrorMessage);
+        var user = userResult.GetNonNullOrThrow();
+        return Ok(user);
     }
     
     [HttpGet("userByUserId")]
@@ -34,10 +35,11 @@ public class UserController(IUserService userService) : ControllerBase
     [Produces(typeof(GreenfieldCoreServices.Models.Users.User))]
     public async Task<IActionResult> GetUserByUserId([FromQuery] long userId)
     {
-        var user = await userService.GetUserByUserId(userId);
-        return user is null 
-            ? Problem(statusCode: StatusCodes.Status404NotFound, detail: "User not found") 
-            : Ok(user);
+        var userResult = await userService.GetUserByUserId(userId);
+        if (!userResult.IsSuccessful)
+            return Problem(statusCode: userResult.GetStatusCodeInt(), detail: userResult.ErrorMessage);
+        var user = userResult.GetNonNullOrThrow();
+        return Ok(user);
     }
     
     [HttpPatch("updateUsername")]
@@ -48,12 +50,11 @@ public class UserController(IUserService userService) : ControllerBase
     [Produces(typeof(GreenfieldCoreServices.Models.Users.User))]
     public async Task<IActionResult> UpdateUsername([FromBody] UserRequest request) 
     {
-        if (string.IsNullOrWhiteSpace(request.Username))
-            return Problem(statusCode: StatusCodes.Status400BadRequest, detail: "A valid minecraftUuid and username are required");
-        var updatedUser = await userService.UpdateUsername(request.MinecraftUuid, request.Username);
-        return updatedUser is null 
-            ? Problem(statusCode: StatusCodes.Status404NotFound, detail: "User not found or username not updated") 
-            : Ok(updatedUser);
+        var updateUserResult = await userService.UpdateUsername(request.MinecraftUuid, request.Username);
+        if (!updateUserResult.IsSuccessful)
+            return Problem(statusCode: updateUserResult.GetStatusCodeInt(), detail: updateUserResult.ErrorMessage);
+        var updatedUser = updateUserResult.GetNonNullOrThrow();
+        return Ok(updatedUser);
     }
 
     [HttpPost("createUser")]
@@ -64,13 +65,11 @@ public class UserController(IUserService userService) : ControllerBase
     [Produces(typeof(GreenfieldCoreServices.Models.Users.User))]
     public async Task<IActionResult> CreateUser([FromBody] UserRequest request)
     {
-        if (string.IsNullOrWhiteSpace(request.Username))
-            return Problem(statusCode: StatusCodes.Status400BadRequest, detail: "A valid minecraftUuid and username are required");
-        var created = await userService.CreateUser(request.MinecraftUuid, request.Username);
-        
-        return created is null 
-            ? Problem(statusCode: StatusCodes.Status409Conflict, detail: "User already exists or could not be created") 
-            : CreatedAtAction(nameof(GetUserByUuid), new { version = HttpContext.GetRequestedApiVersion()?.ToString(), minecraftUuid = created.MinecraftUuid }, created);
+        var createdUserResult = await userService.CreateUser(request.MinecraftUuid, request.Username);
+        if (!createdUserResult.IsSuccessful)
+            return Problem(statusCode: createdUserResult.GetStatusCodeInt(), detail: createdUserResult.ErrorMessage);
+        var created = createdUserResult.GetNonNullOrThrow();
+        return CreatedAtAction(nameof(GetUserByUuid), new { version = HttpContext.GetRequestedApiVersion()?.ToString(), minecraftUuid = created.MinecraftUuid }, created);
     }
     
 }

@@ -1,17 +1,18 @@
 using System.Diagnostics.CodeAnalysis;
+using System.Net;
 
 namespace GreenfieldCoreDataAccess.Database.UnitOfWork;
 
-public class DbResult<T>
+public class Result<T>
 {
     
     /// <summary>
-    /// The data returned from the database operation. Default if the operation failed.
+    /// The data returned from the operation. Default if the operation failed.
     /// </summary>
     public required T? Data { get; set; }
     
     /// <summary>
-    /// Indicates whether the database operation was successful. Under normal usage, a failed operation is one that throws a DbException.
+    /// Indicates whether the operation was successful. Under normal usage, a failed operation is one that throws an Exception and fails to return a result.
     /// </summary>
     public required bool IsSuccessful { get; set; }
     
@@ -19,20 +20,36 @@ public class DbResult<T>
     /// The error message if the operation failed. Null if the operation was successful.
     /// </summary>
     public required string? ErrorMessage { get; set; }
+
+    /// <summary>
+    /// The HTTP status code representing the result of the operation.
+    /// </summary>
+    public HttpStatusCode StatusCode { get; set; } = HttpStatusCode.OK;
     
-    public static DbResult<T> Success(T data) => new()
+    public static Result<T> Success(T data, HttpStatusCode statusCode = HttpStatusCode.OK) => new()
     {
         Data = data,
         IsSuccessful = true,
-        ErrorMessage = null
+        ErrorMessage = null,
+        StatusCode = statusCode
     };
     
-    public static DbResult<T> Failure(string errorMessage) => new()
+    public static Result<T> Failure(string errorMessage, HttpStatusCode statusCode = HttpStatusCode.BadRequest) => new()
     {
         Data = default,
         IsSuccessful = false,
-        ErrorMessage = errorMessage
+        ErrorMessage = errorMessage,
+        StatusCode = statusCode
     };
+    
+    /// <summary>
+    /// Returns the StatusCode as an integer.
+    /// </summary>
+    /// <returns></returns>
+    public int GetStatusCodeInt()
+    {
+        return (int)StatusCode;
+    }
     
     public void ThrowIfFailed()
     {
@@ -41,11 +58,20 @@ public class DbResult<T>
             throw new Exception(ErrorMessage);
         }
     }
+    
+    /// <summary>
+    /// Returns true if the Data property is null.
+    /// </summary>
+    /// <returns></returns>
+    public bool IsDataNull()
+    {
+        return Data is null;
+    }
 
     /// <summary>
-    /// If the Database operation did not succeed, throw an exception with the provided message or the error message from the DbResult.
+    /// If the operation did not succeed, throw an exception with the provided message or the error message from the Result.
     /// <br/>
-    /// Note: If the operation did not throw a DbException, the Data property may still be null even if IsSuccessful is true.
+    /// Note: If the operation did not throw an Exception, the Data property may still be null even if IsSuccessful is true.
     /// </summary>
     /// <param name="message">Optional custom message for the exception.</param>
     /// <returns></returns>
@@ -56,7 +82,7 @@ public class DbResult<T>
     }
 
     /// <summary>
-    /// If the Database operation did not succeed, throw an exception with the provided unsuccessful message or the error message from the DbResult.
+    /// If the operation did not succeed, throw an exception with the provided unsuccessful message or the error message from the Result.
     /// If the operation was successful but the Data is null, throw an exception with the provided null data message or a default message.
     /// <br/>
     /// Note: This should never return null.
@@ -70,13 +96,13 @@ public class DbResult<T>
     {
         return !IsSuccessful
             ? throw new Exception(unsuccessfulMessage ?? ErrorMessage)
-            : Data ?? throw new Exception(nullDataMessage ?? "Database operation returned null data.");
+            : Data ?? throw new Exception(nullDataMessage ?? "Operation returned null data.");
     }
     
     /// <summary>
-    /// If the Database operation did not succeed, throw an exception created by the provided factory function.
+    /// If the operation did not succeed, throw an exception created by the provided factory function.
     /// <br/>
-    /// Note: If the operation did not throw a DbException, the Data property may still be null even if IsSuccessful is true.
+    /// Note: If the operation did not throw a Exception, the Data property may still be null even if IsSuccessful is true.
     /// </summary>
     /// <param name="exceptionFactory">The factory function to create the exception to throw.</param>
     /// <returns></returns>
@@ -87,9 +113,9 @@ public class DbResult<T>
     }
     
     /// <summary>
-    /// If the Database operation did not succeed, return the provided default value.
+    /// If the operation did not succeed, return the provided default value.
     /// <br/>
-    /// Note: If the operation did not throw a DbException, the Data property may still be null even if IsSuccessful is true.
+    /// Note: If the operation did not throw an Exception, the Data property may still be null even if IsSuccessful is true.
     /// </summary>
     /// <param name="defaultValue">The default value to return if the operation was not successful.</param>
     /// <returns></returns>

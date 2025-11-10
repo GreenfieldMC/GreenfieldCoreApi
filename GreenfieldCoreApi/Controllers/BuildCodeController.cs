@@ -41,16 +41,14 @@ public class BuildCodeController(IBuildCodeService buildCodeService) : Controlle
     [Authorize(Roles = "BuildCodes.Write")]
     [ProducesResponseType(StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(StatusCodes.Status409Conflict)]
     [Produces(typeof(BuildCode))]
     public async Task<IActionResult> Create([FromBody] BuildCodeRequest request)
     {
-        if (string.IsNullOrWhiteSpace(request.Code))
-            return Problem(statusCode: StatusCodes.Status400BadRequest, detail: "A valid build code is required");
-        var created = await buildCodeService.CreateBuildCode(request.ListOrder, request.Code);
-        return created is null
-            ? Problem(statusCode: StatusCodes.Status409Conflict, detail: "Build code already exists or could not be created")
-            : CreatedAtAction(nameof(GetById), new { version = HttpContext.GetRequestedApiVersion()?.ToString(), id = created.BuildCodeId }, created);
+        var createdResult = await buildCodeService.CreateBuildCode(request.ListOrder, request.Code);
+        if (!createdResult.IsSuccessful)
+            return Problem(statusCode: createdResult.GetStatusCodeInt(), detail: createdResult.ErrorMessage);
+        var created = createdResult.GetNonNullOrThrow();
+        return CreatedAtAction(nameof(GetById), new { version = HttpContext.GetRequestedApiVersion()?.ToString(), id = created.BuildCodeId }, created);
     }
 
     [HttpPatch("{id:long}")]
@@ -59,14 +57,13 @@ public class BuildCodeController(IBuildCodeService buildCodeService) : Controlle
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [Produces(typeof(BuildCode))]
-    public async Task<IActionResult> Update([FromRoute] long id, [FromBody] BuildCodeRequest request)
+    public async Task<IActionResult> Update([FromRoute] long id, int? listOrder = null, string? code = null)
     {
-        if (string.IsNullOrWhiteSpace(request.Code))
-            return Problem(statusCode: StatusCodes.Status400BadRequest, detail: "A valid build code is required");
-        var updated = await buildCodeService.UpdateBuildCode(id, request.ListOrder, request.Code);
-        return updated is null
-            ? Problem(statusCode: StatusCodes.Status404NotFound, detail: "Build code not found or not updated")
-            : Ok(updated);
+        var updatedResult = await buildCodeService.UpdateBuildCode(id, listOrder, code);
+        if (!updatedResult.IsSuccessful)
+            return Problem(statusCode: updatedResult.GetStatusCodeInt(), detail: updatedResult.ErrorMessage);
+        var updated = updatedResult.GetNonNullOrThrow();
+        return Ok(updated);
     }
 
     [HttpDelete("{id:long}")]
@@ -76,9 +73,10 @@ public class BuildCodeController(IBuildCodeService buildCodeService) : Controlle
     [Produces(typeof(BuildCode))]
     public async Task<IActionResult> Delete([FromRoute] long id)
     {
-        var deleted = await buildCodeService.DeleteBuildCode(id);
-        return deleted is null
-            ? Problem(statusCode: StatusCodes.Status404NotFound, detail: "Build code not found or not deleted")
-            : Ok(deleted);
+        var deletedResult = await buildCodeService.DeleteBuildCode(id);
+        if (!deletedResult.IsSuccessful)
+            return Problem(statusCode: deletedResult.GetStatusCodeInt(), detail: deletedResult.ErrorMessage);
+        var deleted = deletedResult.GetNonNullOrThrow();
+        return Ok(deleted);
     }
 }

@@ -14,7 +14,7 @@ public class BuildCodeRepository(IUnitOfWork uow) : BaseRepository(uow), IBuildC
     private const string SelectBuildCodesProc = "usp_SelectBuildCodes";
     private const string UpdateBuildCodeProc = "usp_UpdateBuildCode";
     
-    public async Task<DbResult<BuildCodeEntity?>> CreateBuildCode(int listOrder, string buildCode)
+    public async Task<Result<BuildCodeEntity?>> CreateBuildCode(int listOrder, string buildCode)
     {
         var parameters = new DynamicParameters();
         parameters.Add("p_ListOrder", listOrder, System.Data.DbType.Int32);
@@ -25,13 +25,13 @@ public class BuildCodeRepository(IUnitOfWork uow) : BaseRepository(uow), IBuildC
                 parameters,
                 commandType: System.Data.CommandType.StoredProcedure,
                 transaction: Transaction);
-            return DbResult<BuildCodeEntity?>.Success(result);
+            return Result<BuildCodeEntity?>.Success(result);
         } catch (DbException ex) {
-            return DbResult<BuildCodeEntity?>.Failure($"Failed to create build code: {ex.Message}");
+            return Result<BuildCodeEntity?>.Failure($"Failed to create build code: {ex.Message}");
         }
     }
 
-    public async Task<DbResult<BuildCodeEntity?>> GetBuildCode(long buildCodeId)
+    public async Task<Result<BuildCodeEntity?>> GetBuildCode(long buildCodeId)
     {
         var parameters = new DynamicParameters();
         parameters.Add("p_BuildCodeId", buildCodeId, System.Data.DbType.Int64);
@@ -41,26 +41,26 @@ public class BuildCodeRepository(IUnitOfWork uow) : BaseRepository(uow), IBuildC
                 parameters,
                 commandType: System.Data.CommandType.StoredProcedure,
                 transaction: Transaction);
-            return DbResult<BuildCodeEntity?>.Success(result);
+            return Result<BuildCodeEntity?>.Success(result);
         } catch (DbException ex) {
-            return DbResult<BuildCodeEntity?>.Failure($"Failed to get build code: {ex.Message}");
+            return Result<BuildCodeEntity?>.Failure($"Failed to get build code: {ex.Message}");
         }
     }
 
-    public async Task<DbResult<IEnumerable<BuildCodeEntity>>> GetAllBuildCodes()
+    public async Task<Result<IEnumerable<BuildCodeEntity>>> GetAllBuildCodes()
     {
         try {
             var result = await Connection.QueryAsync<BuildCodeEntity>(
                 SelectBuildCodesProc,
                 commandType: System.Data.CommandType.StoredProcedure,
                 transaction: Transaction);
-            return DbResult<IEnumerable<BuildCodeEntity>>.Success(result);
+            return Result<IEnumerable<BuildCodeEntity>>.Success(result);
         } catch (DbException ex) {
-            return DbResult<IEnumerable<BuildCodeEntity>>.Failure($"Failed to get all build codes: {ex.Message}");
+            return Result<IEnumerable<BuildCodeEntity>>.Failure($"Failed to get all build codes: {ex.Message}");
         }
     }
 
-    public async Task<DbResult<bool>> DeleteBuildCode(long buildCodeId)
+    public async Task<Result<bool>> DeleteBuildCode(long buildCodeId)
     {
         var parameters = new DynamicParameters();
         parameters.Add("p_BuildCodeId", buildCodeId, System.Data.DbType.Int64);
@@ -70,13 +70,13 @@ public class BuildCodeRepository(IUnitOfWork uow) : BaseRepository(uow), IBuildC
                 parameters,
                 commandType: System.Data.CommandType.StoredProcedure,
                 transaction: Transaction);
-            return DbResult<bool>.Success(affected > 0);
+            return Result<bool>.Success(affected > 0);
         } catch (DbException ex) {
-            return DbResult<bool>.Failure($"Failed to delete build code: {ex.Message}");
+            return Result<bool>.Failure($"Failed to delete build code: {ex.Message}");
         }
     }
 
-    public async Task<DbResult<bool>> UpdateBuildCode(long buildCodeId, int listOrder, string buildCode)
+    public async Task<Result<bool>> UpdateBuildCode(long buildCodeId, int listOrder, string buildCode)
     {
         var parameters = new DynamicParameters();
         parameters.Add("p_BuildCodeId", buildCodeId, System.Data.DbType.Int64);
@@ -88,9 +88,9 @@ public class BuildCodeRepository(IUnitOfWork uow) : BaseRepository(uow), IBuildC
                 parameters,
                 commandType: System.Data.CommandType.StoredProcedure,
                 transaction: Transaction);
-            return DbResult<bool>.Success(affected > 0);
+            return Result<bool>.Success(affected > 0);
         } catch (DbException ex) {
-            return DbResult<bool>.Failure($"Failed to update build code: {ex.Message}");
+            return Result<bool>.Failure($"Failed to update build code: {ex.Message}");
         }
     }
 }
