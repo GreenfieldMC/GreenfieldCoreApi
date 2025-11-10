@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Collections.Immutable;
+using System.Diagnostics.CodeAnalysis;
 using GreenfieldCoreServices.Services.Interfaces;
 
 namespace GreenfieldCoreServices.Services.Caching;
@@ -9,9 +10,9 @@ public class BaseCacheService<TKey, TValue> : ICacheService<TKey, TValue> where 
     
     private readonly IDictionary<TKey, TValue> _cache = new ConcurrentDictionary<TKey, TValue>();
     
-    public bool TryGetValue(TKey key, out TValue value) => _cache.TryGetValue(key, out value);
+    public bool TryGetValue(TKey key, [MaybeNullWhen(false)] out TValue value) => _cache.TryGetValue(key, out value);
 
-    public bool TryGetValue(Func<TValue, bool> predicate, out TValue value) => _cache.Values.FirstOrDefault(predicate) is { } foundValue
+    public bool TryGetValue(Func<TValue, bool> predicate, [MaybeNullWhen(false)] out TValue value) => _cache.Values.FirstOrDefault(predicate) is { } foundValue
         ? (value = foundValue) != null
         : (value = default!) != null;
 
