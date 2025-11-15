@@ -20,13 +20,17 @@ public abstract class BaseScriptManager : IScriptManager
         ScriptsRoot = Path.Combine(Directory.GetParent(Environment.CurrentDirectory)?.FullName, scriptRoot);
         
         _logger.LogInformation("Scripts root directory: {ScriptsRoot}", ScriptsRoot);
-        _logger.LogInformation("Running script manager...");
     }
     
     public async Task ApplyPendingScripts(CancellationToken cancellationToken)
     {
+        _logger.LogInformation("Running script manager...");
         var scriptBeingApplied = "";
-        if (!Directory.Exists(ScriptsRoot)) return;
+        if (!Directory.Exists(ScriptsRoot))
+        {
+            _logger.LogWarning("Scripts root directory does not exist: {ScriptsRoot}", ScriptsRoot);
+            return;
+        }
 
         try
         {
