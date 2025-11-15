@@ -1,4 +1,5 @@
 using System.Data;
+using System.Data.Common;
 using Dapper;
 using GreenfieldCoreDataAccess.Database.Models;
 using GreenfieldCoreDataAccess.Database.Repositories.Interfaces;
@@ -25,7 +26,8 @@ public class ClientRepository(IUnitOfWork uow) : BaseRepository(uow), IClientRep
     
 
     /// <inheritdoc />
-    public async Task<(Guid, DateTime)> RegisterClient(string clientName, string clientSecretHash, string salt)
+    public async Task<Result<(Guid, DateTime)>> RegisterClient(string clientName, string clientSecretHash,
+        string salt)
     {
         var guid = Guid.NewGuid();
         
@@ -35,116 +37,166 @@ public class ClientRepository(IUnitOfWork uow) : BaseRepository(uow), IClientRep
         parameters.Add("p_ClientSecretHash", clientSecretHash, DbType.String, size: 255);
         parameters.Add("p_Salt", salt, DbType.String, size: 255);
         
-        var createdOn = await Connection.ExecuteScalarAsync<DateTime>(RegisterClientProc, parameters, commandType: CommandType.StoredProcedure, transaction: Transaction);
-        
-        return (guid, createdOn);
+        try 
+        {
+            var createdOn = await Connection.ExecuteScalarAsync<DateTime>(RegisterClientProc, parameters, commandType: CommandType.StoredProcedure, transaction: Transaction);
+            return Result<(Guid, DateTime)>.Success((guid, createdOn));
+        }
+        catch (DbException ex)
+        {
+            return Result<(Guid, DateTime)>.Failure($"Failed to register client: {ex.Message}");
+        }
     }
 
     /// <inheritdoc />
-    public async Task<bool> VerifyClientCredentials(Guid clientId, string clientSecretHash,
+    public async Task<Result<bool>> VerifyClientCredentials(Guid clientId, string clientSecretHash,
         string salt)
     {
         var parameters = new DynamicParameters();
         parameters.Add("p_ClientId", clientId, DbType.Guid);
         parameters.Add("p_ClientSecretHash", clientSecretHash, DbType.String, size: 255);
         parameters.Add("p_Salt", salt, DbType.String, size: 255);
-        
-        return await Connection.ExecuteScalarAsync<bool>(VerifyClientCredentialsProc, parameters, commandType: CommandType.StoredProcedure, transaction: Transaction);
+
+        try
+        {
+            return Result<bool>.Success(await Connection.ExecuteScalarAsync<bool>(VerifyClientCredentialsProc, parameters, commandType: CommandType.StoredProcedure, transaction: Transaction));
+        }
+        catch (DbException e)
+        {
+            return Result<bool>.Failure($"Failed to verify client credentials: {e.Message}");
+        }
     }
 
     /// <inheritdoc />
-    public async Task<ClientEntity?> GetClientById(Guid clientId)
+    public async Task<Result<ClientEntity?>> GetClientById(Guid clientId)
     {
         var parameters = new DynamicParameters();
         parameters.Add("p_ClientId", clientId, DbType.Guid);
-        
-        return await Connection.QuerySingleOrDefaultAsync<ClientEntity?>(GetClientByIdProc, parameters, commandType: CommandType.StoredProcedure, transaction: Transaction);
+        try {
+            var result = await Connection.QuerySingleOrDefaultAsync<ClientEntity?>(GetClientByIdProc, parameters, commandType: CommandType.StoredProcedure, transaction: Transaction);
+            return Result<ClientEntity?>.Success(result);
+        } catch (DbException ex) {
+            return Result<ClientEntity?>.Failure($"Failed to get client by ID: {ex.Message}");
+        }
     }
 
     /// <inheritdoc />
-    public Task<ClientEntity?> GetClientByName(string clientName)
+    public async Task<Result<ClientEntity?>> GetClientByName(string clientName)
     {
         var parameters = new DynamicParameters();
         parameters.Add("p_ClientName", clientName, DbType.String, size: 255);
-        
-        return Connection.QuerySingleOrDefaultAsync<ClientEntity?>(GetClientByNameProc, parameters, commandType: CommandType.StoredProcedure, transaction: Transaction);
+        try {
+            var result = await Connection.QuerySingleOrDefaultAsync<ClientEntity?>(GetClientByNameProc, parameters, commandType: CommandType.StoredProcedure, transaction: Transaction);
+            return Result<ClientEntity?>.Success(result);
+        } catch (DbException ex) {
+            return Result<ClientEntity?>.Failure($"Failed to get client by name: {ex.Message}");
+        }
     }
 
     /// <inheritdoc />
-    public Task<IEnumerable<ClientEntity>> GetAllClients()
+    public async Task<Result<IEnumerable<ClientEntity>>> GetAllClients()
     {
-        return Connection.QueryAsync<ClientEntity>(GetAllClientsProc, commandType: CommandType.StoredProcedure, transaction: Transaction);
+        try {
+            var result = await Connection.QueryAsync<ClientEntity>(GetAllClientsProc, commandType: CommandType.StoredProcedure, transaction: Transaction);
+            return Result<IEnumerable<ClientEntity>>.Success(result);
+        } catch (DbException ex) {
+            return Result<IEnumerable<ClientEntity>>.Failure($"Failed to get all clients: {ex.Message}");
+        }
     }
 
     /// <inheritdoc />
-    public async Task<bool> DeleteClient(Guid clientId)
+    public async Task<Result<bool>> DeleteClient(Guid clientId)
     {
         var parameters = new DynamicParameters();
         parameters.Add("p_ClientId", clientId, DbType.Guid);
-
-        return await Connection.ExecuteAsync(DeleteClientProc, parameters,
-            commandType: CommandType.StoredProcedure, transaction: Transaction) > 0;
+        try {
+            var affected = await Connection.ExecuteAsync(DeleteClientProc, parameters, commandType: CommandType.StoredProcedure, transaction: Transaction);
+            return Result<bool>.Success(affected > 0);
+        } catch (DbException ex) {
+            return Result<bool>.Failure($"Failed to delete client: {ex.Message}");
+        }
     }
 
     /// <inheritdoc />
-    public async Task<IEnumerable<ClientRoleEntity>> GetClientRoles(Guid clientId)
+    public async Task<Result<IEnumerable<ClientRoleEntity>>> GetClientRoles(Guid clientId)
     {
         var parameters = new DynamicParameters();
         parameters.Add("p_ClientId", clientId, DbType.Guid);
-        
-        return await Connection.QueryAsync<ClientRoleEntity>(SelectClientRolesProc, parameters, commandType: CommandType.StoredProcedure, transaction: Transaction);
+        try {
+            var result = await Connection.QueryAsync<ClientRoleEntity>(SelectClientRolesProc, parameters, commandType: CommandType.StoredProcedure, transaction: Transaction);
+            return Result<IEnumerable<ClientRoleEntity>>.Success(result);
+        } catch (DbException ex) {
+            return Result<IEnumerable<ClientRoleEntity>>.Failure($"Failed to get client roles: {ex.Message}");
+        }
     }
 
     /// <inheritdoc />
-    public async Task<bool> AssignRoleToClient(Guid clientId, string roleName)
+    public async Task<Result<bool>> AssignRoleToClient(Guid clientId, string roleName)
     {
         var parameters = new DynamicParameters();
         parameters.Add("p_ClientId", clientId, DbType.Guid);
         parameters.Add("p_RoleName", roleName, DbType.String, size: 255);
-
-        return await Connection.ExecuteAsync(InsertClientRoleProc, parameters, commandType: CommandType.StoredProcedure,
-            transaction: Transaction) > 0;
+        try {
+            var affected = await Connection.ExecuteAsync(InsertClientRoleProc, parameters, commandType: CommandType.StoredProcedure, transaction: Transaction);
+            return Result<bool>.Success(affected > 0);
+        } catch (DbException ex) {
+            return Result<bool>.Failure($"Failed to assign role to client: {ex.Message}");
+        }
     }
 
     /// <inheritdoc />
-    public async Task<bool> RemoveRoleFromClient(Guid clientId, string roleName)
+    public async Task<Result<bool>> RemoveRoleFromClient(Guid clientId, string roleName)
     {
         var parameters = new DynamicParameters();
         parameters.Add("p_ClientId", clientId, DbType.Guid);
         parameters.Add("p_RoleName", roleName, DbType.String, size: 255);
-
-        return await Connection.ExecuteAsync(DeleteClientRoleProc, parameters, commandType: CommandType.StoredProcedure,
-            transaction: Transaction) > 0;
+        try {
+            var affected = await Connection.ExecuteAsync(DeleteClientRoleProc, parameters, commandType: CommandType.StoredProcedure, transaction: Transaction);
+            return Result<bool>.Success(affected > 0);
+        } catch (DbException ex) {
+            return Result<bool>.Failure($"Failed to remove role from client: {ex.Message}");
+        }
     }
 
     /// <inheritdoc />
-    public Task<int> ClearClientRoles(Guid clientId)
+    public async Task<Result<int>> ClearClientRoles(Guid clientId)
     {
         var parameters = new DynamicParameters();
         parameters.Add("p_ClientId", clientId, DbType.Guid);
-        
-        return Connection.ExecuteAsync(ClearClientRolesProc, parameters, commandType: CommandType.StoredProcedure, transaction: Transaction);
+        try {
+            var affected = await Connection.ExecuteAsync(ClearClientRolesProc, parameters, commandType: CommandType.StoredProcedure, transaction: Transaction);
+            return Result<int>.Success(affected);
+        } catch (DbException ex) {
+            return Result<int>.Failure($"Failed to clear client roles: {ex.Message}");
+        }
     }
 
     /// <inheritdoc />
-    public Task<bool> UpdateClientName(Guid clientId, string newClientName)
+    public async Task<Result<bool>> UpdateClientName(Guid clientId, string newClientName)
     {
         var parameters = new DynamicParameters();
         parameters.Add("p_ClientId", clientId, DbType.Guid);
         parameters.Add("p_NewClientName", newClientName, DbType.String, size: 255);
-        
-        return Connection.ExecuteAsync(UpdateClientNameProc, parameters, commandType: CommandType.StoredProcedure, transaction: Transaction)
-            .ContinueWith(t => t.Result > 0);
+        try {
+            var affected = await Connection.ExecuteAsync(UpdateClientNameProc, parameters, commandType: CommandType.StoredProcedure, transaction: Transaction);
+            return Result<bool>.Success(affected > 0);
+        } catch (DbException ex) {
+            return Result<bool>.Failure($"Failed to update client name: {ex.Message}");
+        }
     }
 
     /// <inheritdoc />
-    public Task UpdateClientSecret(Guid clientId, string newClientSecretHash, string newSalt)
+    public async Task<Result<bool>> UpdateClientSecret(Guid clientId, string newClientSecretHash, string newSalt)
     {
         var parameters = new DynamicParameters();
         parameters.Add("p_ClientId", clientId, DbType.Guid);
         parameters.Add("p_NewSecretHash", newClientSecretHash, DbType.String, size: 255);
         parameters.Add("p_NewSalt", newSalt, DbType.String, size: 255);
-        
-        return Connection.ExecuteAsync(UpdateClientSecretProc, parameters, commandType: CommandType.StoredProcedure, transaction: Transaction);
+        try {
+            var affected = await Connection.ExecuteAsync(UpdateClientSecretProc, parameters, commandType: CommandType.StoredProcedure, transaction: Transaction);
+            return Result<bool>.Success(affected > 0);
+        } catch (DbException ex) {
+            return Result<bool>.Failure($"Failed to update client secret: {ex.Message}");
+        }
     }
 }

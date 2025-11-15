@@ -20,7 +20,10 @@ public class LoginController(IClientAuthService clientAuthService, IConfiguratio
     [Produces("application/json")]
     public async Task<IActionResult> Token([FromForm] TokenRequest request)
     {
-        var token = await clientAuthService.AuthenticateLogin(request.client_id, request.client_secret);
+        var tokenResult = await clientAuthService.AuthenticateLogin(request.client_id, request.client_secret);
+        if (!tokenResult.IsSuccessful)
+            return Problem(statusCode: tokenResult.GetStatusCodeInt(), detail: tokenResult.ErrorMessage);
+        var token = tokenResult.GetNonNullOrThrow();
         return Ok(new {
             access_token = token, 
             token_type = "Bearer", 

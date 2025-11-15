@@ -1,4 +1,5 @@
 using System.IdentityModel.Tokens.Jwt;
+using System.Net;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
@@ -14,19 +15,19 @@ namespace GreenfieldCoreServices.Services;
 public class ClientAuthService(IUnitOfWork uow, IConfiguration config, ICacheService<Guid, Client> cache) : IClientAuthService
 {
     
-    public async Task<(Client client, string secret)> RegisterClient(string clientName, List<string> roles)
+    public async Task<Result<(Client client, string secret)>> RegisterClient(string clientName, List<string> roles)
     {
         var generatedSecret = GenerateClientSecret();
         
         uow.BeginTransaction();
         var repo = uow.Repository<IClientRepository>();
         
-        var newClient = await repo.RegisterClient(clientName, generatedSecret.hashedSecret, generatedSecret.salt);
+        var newClient = (await repo.RegisterClient(clientName, generatedSecret.hashedSecret, generatedSecret.salt)).GetOrThrow();
 
         var assignedRoles = new List<string>();
         foreach (var role in roles)
         {
-            var assignedRole = await repo.AssignRoleToClient(newClient.Item1, role);
+            var assignedRole = (await repo.AssignRoleToClient(newClient.Item1, role)).GetOrThrow();
             if (assignedRole) assignedRoles.Add(role);
         }
         
@@ -42,21 +43,19 @@ public class ClientAuthService(IUnitOfWork uow, IConfiguration config, ICacheSer
         
         cache.SetValue(registeredClient.ClientId, registeredClient);
         
-        return (registeredClient, generatedSecret.secret);
+        return Result<(Client client, string secret)>.Success((registeredClient, generatedSecret.secret));
     }
 
-    public async Task<string> AuthenticateLogin(Guid clientId, string clientSecret)
+    public async Task<Result<string>> AuthenticateLogin(Guid clientId, string clientSecret)
     {
         var repo = uow.Repository<IClientRepository>();
-        var client = await repo.GetClientById(clientId);
-        
-        if (client == null) throw new Exception("Client not found");
+        var client = (await repo.GetClientById(clientId)).GetNonNullOrThrow(nullDataMessage: "Client not found.");
         
         var hashedSecret = HashClientSecret(clientSecret, client.Salt);
         
-        var isValid = await repo.VerifyClientCredentials(clientId, hashedSecret.hash, hashedSecret.salt);
+        var isValid = (await repo.VerifyClientCredentials(clientId, hashedSecret.hash, hashedSecret.salt)).GetOrThrow();
 
-        var roles = (await repo.GetClientRoles(clientId)).Select(r => r.RoleName).ToList();;
+        var roles = (await repo.GetClientRoles(clientId)).GetNonNullOrThrow().Select(r => r.RoleName).ToList();
         
         cache.SetValue(client.ClientId, new Client
         {
@@ -66,20 +65,20 @@ public class ClientAuthService(IUnitOfWork uow, IConfiguration config, ICacheSer
             Roles = roles
         });
         
-        return !isValid ? throw new Exception("Invalid credentials") : GenerateToken(clientId);
+        return !isValid ? Result<string>.Failure("Invalid credentials.", HttpStatusCode.Unauthorized) : Result<string>.Success(GenerateToken(clientId));
     }
 
-    public async Task<IEnumerable<Client>> GetAllClients()
+    public async Task<Result<IEnumerable<Client>>> GetAllClients()
     {
         var repo = uow.Repository<IClientRepository>();
 
-        var foundClients = await repo.GetAllClients();
+        var foundClients = (await repo.GetAllClients()).GetNonNullOrThrow();
         
         var clients = new List<Client>();
         
         foreach (var client in foundClients)
         {
-            var roles = (await repo.GetClientRoles(client.ClientId)).Select(r => r.RoleName).ToList();
+            var roles = (await repo.GetClientRoles(client.ClientId)).GetNonNullOrThrow().Select(r => r.RoleName).ToList();
             clients.Add(new Client
             {
                 ClientId = client.ClientId,
@@ -89,22 +88,21 @@ public class ClientAuthService(IUnitOfWork uow, IConfiguration config, ICacheSer
             });
         }
         
-        return clients;
+        return Result<IEnumerable<Client>>.Success(clients);
     }
 
-    public async Task<Client?> GetClientById(Guid clientId)
+    public async Task<Result<Client>> GetClientById(Guid clientId)
     {
         if (cache.TryGetValue(clientId, out var value))
-            return value;
+            return Result<Client>.Success(value);
         
         var repo = uow.Repository<IClientRepository>();
         
-        var foundClient = await repo.GetClientById(clientId);
-        
-        if (foundClient == null) return null;
+        var foundClient = (await repo.GetClientById(clientId)).GetOrThrow();
+        if (foundClient is null) return Result<Client>.Failure("Client not found.", HttpStatusCode.NotFound);
         
         var roles = await repo.GetClientRoles(clientId);
-        var roleNames = roles.Select(r => r.RoleName).ToList();
+        var roleNames = roles.GetNonNullOrThrow().Select(r => r.RoleName).ToList();
         
         var client = new Client
         {
@@ -116,22 +114,21 @@ public class ClientAuthService(IUnitOfWork uow, IConfiguration config, ICacheSer
         
         cache.SetValue(client.ClientId, client);
         
-        return client;
+        return Result<Client>.Success(client);
     }
 
-    public async Task<Client?> GetClientByName(string clientName)
+    public async Task<Result<Client>> GetClientByName(string clientName)
     {
         if (cache.TryGetValue(c => c.ClientName.Equals(clientName, StringComparison.OrdinalIgnoreCase), out var cachedClient))
-            return cachedClient;
+            return Result<Client>.Success(cachedClient);
         
         var repo = uow.Repository<IClientRepository>();
         
-        var foundClient = await repo.GetClientByName(clientName);
-        
-        if (foundClient == null) return null;
+        var foundClient = (await repo.GetClientByName(clientName)).GetOrThrow();
+        if (foundClient is null) return Result<Client>.Failure("Client not found.", HttpStatusCode.NotFound);
         
         var roles = await repo.GetClientRoles(foundClient.ClientId);
-        var roleNames = roles.Select(r => r.RoleName).ToList();
+        var roleNames = roles.GetNonNullOrThrow().Select(r => r.RoleName).ToList();
         
         var client = new Client
         {
@@ -143,30 +140,32 @@ public class ClientAuthService(IUnitOfWork uow, IConfiguration config, ICacheSer
         
         cache.SetValue(client.ClientId, client);
         
-        return client;
+        return Result<Client>.Success(client);
     }
 
-    public async Task<Client?> DeleteClient(Guid clientId)
+    public async Task<Result<Client>> DeleteClient(Guid clientId)
     {
-        var foundClient = await GetClientById(clientId);
-        if (foundClient == null) return null;
+        var foundClientResult = await GetClientById(clientId);
+        if (!foundClientResult.IsSuccessful) return foundClientResult;
+        var foundClient = foundClientResult.GetNonNullOrThrow(nullDataMessage: "GetClientById returned null client despite being successful.");
         
         uow.BeginTransaction();
-        var deleteTask = await uow.Repository<IClientRepository>().DeleteClient(clientId);
+        var deleted = (await uow.Repository<IClientRepository>().DeleteClient(clientId)).GetOrThrow();
         
-        if (!deleteTask) return null;
+        if (!deleted) return Result<Client>.Failure("Client could not be deleted.");
         
         uow.CompleteAndCommit();
         
         cache.RemoveValue(clientId);
         
-        return foundClient;
+        return Result<Client>.Success(foundClient);
     }
 
-    public async Task<Client?> UpdateClientRoles(Guid clientId, List<string> roles)
+    public async Task<Result<Client>> UpdateClientRoles(Guid clientId, List<string> roles)
     {
-        var foundClient = await GetClientById(clientId);
-        if (foundClient == null) return null;
+        var foundClientResult = await GetClientById(clientId);
+        if (!foundClientResult.IsSuccessful) return foundClientResult;
+        var foundClient = foundClientResult.GetNonNullOrThrow(nullDataMessage: "GetClientById returned null client despite being successful.");
         
         var repo = uow.Repository<IClientRepository>();
         var currentRoles = foundClient.Roles;
@@ -177,13 +176,13 @@ public class ClientAuthService(IUnitOfWork uow, IConfiguration config, ICacheSer
         
         foreach (var role in rolesToAdd)
         {
-            var addedRole = await repo.AssignRoleToClient(clientId, role);
+            var addedRole = (await repo.AssignRoleToClient(clientId, role)).GetOrThrow();
             if (addedRole) currentRoles.Add(role);
         }
 
         foreach (var role in rolesToRemove)
         {
-            var removedRole = await repo.RemoveRoleFromClient(clientId, role);
+            var removedRole = (await repo.RemoveRoleFromClient(clientId, role)).GetOrThrow();
             if (removedRole) currentRoles.Remove(role);
         }
         
@@ -193,34 +192,36 @@ public class ClientAuthService(IUnitOfWork uow, IConfiguration config, ICacheSer
         
         cache.SetValue(foundClient.ClientId, foundClient);
         
-        return foundClient;
+        return Result<Client>.Success(foundClient);
     }
 
-    public async Task<string?> RefreshClientSecret(Guid clientId)
+    public async Task<Result<string>> RefreshClientSecret(Guid clientId)
     {
-        var foundClient = await GetClientById(clientId);
-        if (foundClient == null) return null;
+        var foundClientResult = await GetClientById(clientId);
+        if (!foundClientResult.IsSuccessful || foundClientResult.IsDataNull()) return Result<string>.Failure("Client not found.", HttpStatusCode.NotFound);
         
         var newSecret = GenerateClientSecret();
         
         uow.BeginTransaction();
         
-        await uow.Repository<IClientRepository>().UpdateClientSecret(clientId, newSecret.hashedSecret, newSecret.salt);
+        var updatedResult = (await uow.Repository<IClientRepository>().UpdateClientSecret(clientId, newSecret.hashedSecret, newSecret.salt)).GetOrThrow();
+        if (!updatedResult) return Result<string>.Failure("Client secret could not be updated.");
         
         uow.CompleteAndCommit();
         
-        return newSecret.secret;
+        return Result<string>.Success(newSecret.secret);
     }
 
-    public async Task<Client?> UpdateClientName(Guid clientId, string newName)
+    public async Task<Result<Client>> UpdateClientName(Guid clientId, string newName)
     {
-        var foundClient = await GetClientById(clientId);
-        if (foundClient == null) return null;
+        var foundClientResult = await GetClientById(clientId);
+        if (!foundClientResult.IsSuccessful) return foundClientResult;
+        var foundClient = foundClientResult.GetNonNullOrThrow(nullDataMessage: "GetClientById returned null client despite being successful.");
         
         uow.BeginTransaction();
         
-        var updateResult = await uow.Repository<IClientRepository>().UpdateClientName(clientId, newName);
-        if (!updateResult) return null;
+        var updateResult = (await uow.Repository<IClientRepository>().UpdateClientName(clientId, newName)).GetOrThrow();
+        if (!updateResult) return Result<Client>.Failure("Client name could not be updated.");
         
         uow.CompleteAndCommit();
         
@@ -228,19 +229,19 @@ public class ClientAuthService(IUnitOfWork uow, IConfiguration config, ICacheSer
         
         cache.SetValue(foundClient.ClientId, foundClient);
         
-        return foundClient;
+        return Result<Client>.Success(foundClient);
     }
 
-    public async Task<Client?> ClearClientRoles(Guid clientId)
+    public async Task<Result<Client>> ClearClientRoles(Guid clientId)
     {
-        var foundClient = await GetClientById(clientId);
-        if (foundClient == null) return null;
+        var foundClientResult = await GetClientById(clientId);
+        if (!foundClientResult.IsSuccessful) return foundClientResult;
+        var foundClient = foundClientResult.GetNonNullOrThrow(nullDataMessage: "GetClientById returned null client despite being successful.");
         
         uow.BeginTransaction();
         
-        var removalCount = await uow.Repository<IClientRepository>().ClearClientRoles(clientId);
-        
-        if (removalCount == 0) return null;
+        var removalCount = (await uow.Repository<IClientRepository>().ClearClientRoles(clientId)).GetOrThrow();
+        if (removalCount == 0) return Result<Client>.Failure("There were no roles removed from the client.");
         
         uow.CompleteAndCommit();
 
@@ -250,7 +251,7 @@ public class ClientAuthService(IUnitOfWork uow, IConfiguration config, ICacheSer
         
         cache.SetValue(foundClient.ClientId, foundClient);
         
-        return foundClient;
+        return Result<Client>.Success(foundClient);
     }
 
     private static (string secret, string hashedSecret, string salt) GenerateClientSecret()

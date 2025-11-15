@@ -17,7 +17,8 @@ public abstract class BaseScriptManager : IScriptManager
         UnitOfWork = unitOfWork;
         Configuration = config;
         var scriptRoot = config.GetValue<string>("ScriptsRoot") ?? throw new ArgumentException("ScriptsRoot not configured.");
-        ScriptsRoot = Path.Combine(Directory.GetParent(Environment.CurrentDirectory)?.FullName, scriptRoot);
+        var parentDir = Directory.GetParent(Environment.CurrentDirectory)?.FullName ?? throw new InvalidOperationException("Could not determine parent directory of current working directory.");
+        ScriptsRoot = Path.Combine(parentDir, scriptRoot);
         
         _logger.LogInformation("Scripts root directory: {ScriptsRoot}", ScriptsRoot);
         _logger.LogInformation("Running script manager...");
