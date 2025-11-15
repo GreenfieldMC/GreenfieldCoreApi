@@ -22,10 +22,9 @@ public class UserController(IUserService userService) : ControllerBase
     public async Task<IActionResult> GetUserByUuid([FromQuery] Guid minecraftUuid)
     {
         var userResult = await userService.GetUserByUuid(minecraftUuid);
-        if (!userResult.IsSuccessful)
-            return Problem(statusCode: userResult.GetStatusCodeInt(), detail: userResult.ErrorMessage);
-        var user = userResult.GetNonNullOrThrow();
-        return Ok(user);
+        return userResult.IsSuccessful
+            ? Ok(userResult.GetNonNullOrThrow())
+            : Problem(statusCode: userResult.GetStatusCodeInt(), detail: userResult.ErrorMessage);
     }
     
     [HttpGet("userByUserId")]
@@ -36,10 +35,9 @@ public class UserController(IUserService userService) : ControllerBase
     public async Task<IActionResult> GetUserByUserId([FromQuery] long userId)
     {
         var userResult = await userService.GetUserByUserId(userId);
-        if (!userResult.IsSuccessful)
-            return Problem(statusCode: userResult.GetStatusCodeInt(), detail: userResult.ErrorMessage);
-        var user = userResult.GetNonNullOrThrow();
-        return Ok(user);
+        return userResult.IsSuccessful
+            ? Ok(userResult.GetNonNullOrThrow())
+            : Problem(statusCode: userResult.GetStatusCodeInt(), detail: userResult.ErrorMessage);
     }
     
     [HttpPatch("updateUsername")]
@@ -51,10 +49,9 @@ public class UserController(IUserService userService) : ControllerBase
     public async Task<IActionResult> UpdateUsername([FromBody] UserRequest request) 
     {
         var updateUserResult = await userService.UpdateUsername(request.MinecraftUuid, request.Username);
-        if (!updateUserResult.IsSuccessful)
-            return Problem(statusCode: updateUserResult.GetStatusCodeInt(), detail: updateUserResult.ErrorMessage);
-        var updatedUser = updateUserResult.GetNonNullOrThrow();
-        return Ok(updatedUser);
+        return updateUserResult.IsSuccessful
+            ? Ok(updateUserResult.GetNonNullOrThrow())
+            : Problem(statusCode: updateUserResult.GetStatusCodeInt(), detail: updateUserResult.ErrorMessage);
     }
 
     [HttpPost("createUser")]

@@ -20,8 +20,10 @@ public class BuildCodeController(IBuildCodeService buildCodeService) : Controlle
     [Produces(typeof(IEnumerable<BuildCode>))]
     public async Task<IActionResult> GetAll([FromQuery] bool showDeleted = false)
     {
-        var codes = await buildCodeService.GetAllBuildCodes(showDeleted);
-        return Ok(codes);
+        var codesResult = await buildCodeService.GetAllBuildCodes(showDeleted);
+        return codesResult.IsSuccessful
+            ? Ok(codesResult.GetNonNullOrThrow())
+            : Problem(statusCode: codesResult.GetStatusCodeInt(), detail: codesResult.ErrorMessage);
     }
 
     [HttpGet("{id:long}")]
@@ -31,10 +33,10 @@ public class BuildCodeController(IBuildCodeService buildCodeService) : Controlle
     [Produces(typeof(BuildCode))]
     public async Task<IActionResult> GetById([FromRoute] long id)
     {
-        var code = await buildCodeService.GetBuildCodeById(id);
-        return code is null 
-            ? Problem(statusCode: StatusCodes.Status404NotFound, detail: "Build code not found")
-            : Ok(code);
+        var codeResult = await buildCodeService.GetBuildCodeById(id);
+        return codeResult.IsSuccessful
+            ? Ok(codeResult.GetNonNullOrThrow())
+            : Problem(statusCode: codeResult.GetStatusCodeInt(), detail: codeResult.ErrorMessage);
     }
 
     [HttpPost]
@@ -60,10 +62,9 @@ public class BuildCodeController(IBuildCodeService buildCodeService) : Controlle
     public async Task<IActionResult> Update([FromRoute] long id, int? listOrder = null, string? code = null)
     {
         var updatedResult = await buildCodeService.UpdateBuildCode(id, listOrder, code);
-        if (!updatedResult.IsSuccessful)
-            return Problem(statusCode: updatedResult.GetStatusCodeInt(), detail: updatedResult.ErrorMessage);
-        var updated = updatedResult.GetNonNullOrThrow();
-        return Ok(updated);
+        return updatedResult.IsSuccessful
+            ? Ok(updatedResult.GetNonNullOrThrow())
+            : Problem(statusCode: updatedResult.GetStatusCodeInt(), detail: updatedResult.ErrorMessage);
     }
 
     [HttpDelete("{id:long}")]
@@ -74,9 +75,8 @@ public class BuildCodeController(IBuildCodeService buildCodeService) : Controlle
     public async Task<IActionResult> Delete([FromRoute] long id)
     {
         var deletedResult = await buildCodeService.DeleteBuildCode(id);
-        if (!deletedResult.IsSuccessful)
-            return Problem(statusCode: deletedResult.GetStatusCodeInt(), detail: deletedResult.ErrorMessage);
-        var deleted = deletedResult.GetNonNullOrThrow();
-        return Ok(deleted);
+        return deletedResult.IsSuccessful
+            ? Ok(deletedResult.GetNonNullOrThrow())
+            : Problem(statusCode: deletedResult.GetStatusCodeInt(), detail: deletedResult.ErrorMessage);
     }
 }
