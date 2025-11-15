@@ -4,6 +4,11 @@
 ##
 ## Get latest from https://github.com/github/gitignore/blob/main/VisualStudio.gitignore
 
+# Appsetting Envionment Specific files
+appsettings.Development.json
+appsettings.UAT.json
+appsettings.Production.json
+
 # User-specific files
 *.rsuser
 *.suo
