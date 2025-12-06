@@ -34,4 +34,29 @@ public interface IUserRepository
     /// <param name="newMinecraftUsername">The new Minecraft username to set</param>
     /// <returns>Result true if an update occurred, false otherwise.</returns>
     Task<Result<bool>> UpdateUsername(Guid minecraftUuid, string newMinecraftUsername);
+
+    /// <summary>
+    /// Create a reference between a user and their Discord account.
+    /// </summary>
+    /// <param name="userId"></param>
+    /// <param name="discordSnowflake">The Discord snowflake ID</param>
+    /// <returns></returns>
+    Task<Result<UserDiscordEntity?>> CreateUserDiscordReference(long userId, ulong discordSnowflake);
+
+    /// <summary>
+    /// Get all Discord references for a given user by their Minecraft UUID.
+    /// </summary>
+    /// <param name="userId"></param>
+    /// <returns></returns>
+    Task<Result<IEnumerable<UserDiscordEntity>>> GetUserDiscordReferences(long userId);
+
+    /// <summary>
+    /// Delete a reference between a user and their Discord account.
+    /// </summary>
+    /// <param name="userId"></param>
+    /// <param name="discordSnowflake">The Discord snowflake ID</param>
+    /// <returns></returns>
+    Task<Result<bool>> DeleteUserDiscordReference(long userId, ulong discordSnowflake);
+    
+    
 }
