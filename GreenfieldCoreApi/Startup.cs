@@ -9,6 +9,7 @@ using GreenfieldCoreDataAccess.Database.UnitOfWork;
 using GreenfieldCoreServices.Commands;
 using GreenfieldCoreServices.Models.BuildCodes;
 using GreenfieldCoreServices.Models.Clients;
+using GreenfieldCoreServices.Models.Users;
 using GreenfieldCoreServices.Services;
 using GreenfieldCoreServices.Services.Caching;
 using GreenfieldCoreServices.Services.Interfaces;
@@ -20,7 +21,6 @@ using Microsoft.AspNetCore.Mvc.Infrastructure;
 using Microsoft.IdentityModel.Tokens;
 using Scalar.AspNetCore;
 using Serilog;
-using Serilog.Events;
 using ILogger = Microsoft.Extensions.Logging.ILogger;
 
 namespace GreenfieldCoreApi;
@@ -69,6 +69,8 @@ public static class Startup
     {
         services.AddSingleton<ICacheService<Guid, Client>, ClientCacheService>();
         services.AddSingleton<ICacheService<long, BuildCode>, BuildCodeCacheService>();
+        services.AddSingleton<ICacheService<long, User>, UserCacheService>();
+        services.AddSingleton<ICacheService<long, List<ulong>>, UserDiscordCacheService>();
     }
 
     internal static void ConfigureConfiguration(this IConfigurationBuilder configBuilder, IWebHostEnvironment env)
