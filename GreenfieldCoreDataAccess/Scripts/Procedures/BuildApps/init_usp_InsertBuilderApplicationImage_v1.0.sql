@@ -1,0 +1,16 @@
+-- DependsOn: ScriptHistory, BuilderAppImageLinks
+create procedure if not exists usp_InsertBuilderApplicationImage(
+    p_ApplicationId bigint,
+    p_LinkType nvarchar(256),
+    p_ImageLink nvarchar(2048))
+begin
+    insert into BuilderAppImageLinks (
+        ApplicationId,
+        LinkType,
+        ImageLink)
+    values (
+        p_ApplicationId,
+        p_LinkType,
+        p_ImageLink);
+end;
+

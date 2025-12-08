@@ -41,6 +41,13 @@ public class Result<T>
         ErrorMessage = errorMessage,
         StatusCode = statusCode
     };
+    public static Result<T> Failure(T data, string errorMessage, HttpStatusCode statusCode = HttpStatusCode.BadRequest) => new()
+    {
+        Data = data,
+        IsSuccessful = false,
+        ErrorMessage = errorMessage,
+        StatusCode = statusCode
+    };
     
     /// <summary>
     /// Returns the StatusCode as an integer.
