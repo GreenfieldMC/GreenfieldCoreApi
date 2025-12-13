@@ -58,5 +58,11 @@ public interface IUserRepository
     /// <returns></returns>
     Task<Result<bool>> DeleteUserDiscordReference(long userId, ulong discordSnowflake);
     
-    
+    /// <summary>
+    /// Get all users linked to a Discord snowflake.
+    /// </summary>
+    /// <param name="discordSnowflake">The Discord snowflake ID.</param>
+    /// <returns>Result containing the linked user entities (empty when none found).</returns>
+    Task<Result<IEnumerable<UserEntity>>> GetUsersByDiscordSnowflake(ulong discordSnowflake);
+
 }

@@ -127,7 +127,22 @@ public class UserService(IUnitOfWork uow, ICacheService<long, User> userCache, I
         var user = userResult.GetNonNullOrThrow();
         return await GetLinkedDiscordAccountsInternal(user.UserId);
     }
-    
+
+    public async Task<Result<IEnumerable<User>>> GetUsersByDiscordSnowflake(ulong discordSnowflake)
+    {
+        if (discordSnowflake == 0)
+            return Result<IEnumerable<User>>.Failure("A valid discordSnowflake must be provided.");
+        var repo = uow.Repository<IUserRepository>();
+        var usersResult = await repo.GetUsersByDiscordSnowflake(discordSnowflake);
+        if (!usersResult.IsSuccessful)
+            return Result<IEnumerable<User>>.Failure(usersResult.ErrorMessage ?? "Failed to get users by Discord snowflake.", usersResult.StatusCode);
+        var entities = usersResult.GetOrDefault([]);
+        var mappedUsers = entities!.Select(User.FromDbModel).ToList();
+        foreach (var user in mappedUsers)
+            userCache.SetValue(user.UserId, user);
+        return Result<IEnumerable<User>>.Success(mappedUsers);
+    }
+
     private async Task<Result<IEnumerable<ulong>>> GetLinkedDiscordAccountsInternal(long userId)
     {
         if (discordCache.TryGetValue(userId, out var cachedDiscordIds))

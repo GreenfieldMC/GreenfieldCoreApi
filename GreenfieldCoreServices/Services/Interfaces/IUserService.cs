@@ -66,4 +66,11 @@ public interface IUserService
     /// <returns>>The list of linked Discord snowflake IDs (or an empty list of no accounts are linked). A failed Result otherwise.</returns>
     public Task<Result<IEnumerable<ulong>>> GetLinkedDiscordAccountsByUuid(Guid minecraftUuid);
     
+    /// <summary>
+    /// Gets all users linked to a Discord snowflake.
+    /// </summary>
+    /// <param name="discordSnowflake">The Discord snowflake ID.</param>
+    /// <returns>The list of linked users (empty when no matches).</returns>
+    public Task<Result<IEnumerable<User>>> GetUsersByDiscordSnowflake(ulong discordSnowflake);
+    
 }

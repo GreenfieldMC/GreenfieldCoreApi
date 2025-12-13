@@ -17,6 +17,7 @@ public class UserRepository(IUnitOfWork uow) : BaseRepository(uow), IUserReposit
     private const string InsertUserDiscordAccountProc = "usp_InsertUserDiscordAccount";
     private const string SelectUserDiscordAccountsProc = "usp_SelectUserDiscordAccounts";
     private const string DeleteUserDiscordAccountProc = "usp_DeleteUserDiscordAccount";
+    private const string SelectUsersByDiscordSnowflakeProc = "usp_SelectUsersByDiscordSnowflake";
     
     public async Task<Result<UserEntity?>> GetUserByUserId(long userId)
     {
@@ -110,6 +111,18 @@ public class UserRepository(IUnitOfWork uow) : BaseRepository(uow), IUserReposit
         } catch (DbException ex)
         {
             return Result<bool>.Failure($"Failed to delete user discord reference: {ex.Message}");
+        }
+    }
+
+    public async Task<Result<IEnumerable<UserEntity>>> GetUsersByDiscordSnowflake(ulong discordSnowflake)
+    {
+        var parameters = new DynamicParameters();
+        parameters.Add("p_DiscordSnowflake", discordSnowflake, DbType.UInt64);
+        try {
+            var users = await Connection.QueryAsync<UserEntity>(SelectUsersByDiscordSnowflakeProc, parameters, commandType: CommandType.StoredProcedure, transaction: Transaction);
+            return Result<IEnumerable<UserEntity>>.Success(users);
+        } catch (DbException ex) {
+            return Result<IEnumerable<UserEntity>>.Failure($"Failed to get users by Discord snowflake: {ex.Message}");
         }
     }
 }

@@ -94,6 +94,21 @@ public class UserController(IUserService userService) : ControllerBase
             : Problem(statusCode: linkedResult.GetStatusCodeInt(), detail: linkedResult.ErrorMessage);
     }
 
+    [HttpGet("discord/{discordSnowflake:long}/users")]
+    [Authorize(Roles = "Users.Read")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [Produces(typeof(IEnumerable<GreenfieldCoreServices.Models.Users.User>))]
+    public async Task<IActionResult> GetUsersByDiscordSnowflake([FromRoute] long discordSnowflake)
+    {
+        if (discordSnowflake <= 0)
+            return Problem(statusCode: StatusCodes.Status400BadRequest, detail: "A valid discordSnowflake must be provided.");
+        var usersResult = await userService.GetUsersByDiscordSnowflake((ulong)discordSnowflake);
+        return usersResult.IsSuccessful
+            ? Ok(usersResult.GetOrDefault([]))
+            : Problem(statusCode: usersResult.GetStatusCodeInt(), detail: usersResult.ErrorMessage);
+    }
+
     [HttpPut("{userId:long}/discord/{discordSnowflake:long}")]
     [Authorize(Roles = "Users.Write")]
     [ProducesResponseType(StatusCodes.Status201Created)]
