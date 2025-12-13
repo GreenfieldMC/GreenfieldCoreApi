@@ -17,6 +17,7 @@ public class BuilderApplicationRepository(IUnitOfWork unitOfWork) : BaseReposito
     private const string SelectBuilderAppsByUserProc = "usp_SelectBuilderApplicationsByUser";
     private const string SelectBuilderAppImagesProc = "usp_SelectBuilderApplicationImages";
     private const string SelectBuilderAppStatusesProc = "usp_SelectBuilderApplicationStatuses";
+    private const string SelectBuilderAppByIdProc = "usp_SelectBuilderApplicationById";
 
     public async Task<Result<IEnumerable<BuilderApplicationEntity>>> GetApplicationsByUser(long userId)
     {
@@ -66,7 +67,7 @@ public class BuilderApplicationRepository(IUnitOfWork unitOfWork) : BaseReposito
     public async Task<Result<BuilderApplicationEntity>> InsertApplication(
         long userId,
         int userAge,
-        string userNationality,
+        string? userNationality,
         string? additionalBuildingInformation,
         string whyJoinGreenfield,
         string? additionalComments)
@@ -121,6 +122,21 @@ public class BuilderApplicationRepository(IUnitOfWork unitOfWork) : BaseReposito
         catch (DbException ex)
         {
             return Result<bool>.Failure(ex.Message, HttpStatusCode.InternalServerError);
+        }
+    }
+
+    public async Task<Result<BuilderApplicationEntity>> GetApplicationById(long applicationId)
+    {
+        var parameters = new DynamicParameters();
+        parameters.Add("p_ApplicationId", applicationId, DbType.Int64);
+        try
+        {
+            var application = await Connection.QuerySingleOrDefaultAsync<BuilderApplicationEntity>(SelectBuilderAppByIdProc, parameters, commandType: CommandType.StoredProcedure, transaction: Transaction);
+            return Result<BuilderApplicationEntity>.Success(application!);
+        }
+        catch (DbException ex)
+        {
+            return Result<BuilderApplicationEntity>.Failure($"Failed to retrieve builder application: {ex.Message}", HttpStatusCode.InternalServerError);
         }
     }
 }

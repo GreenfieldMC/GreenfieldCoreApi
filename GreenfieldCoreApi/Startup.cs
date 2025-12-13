@@ -32,8 +32,6 @@ public static class Startup
     {
         Log.Logger = new LoggerConfiguration()
             .Enrich.FromLogContext()
-            // .WriteTo.Console()
-            // .WriteTo.Debug()
             .ReadFrom.Configuration(builder.Configuration)
             .CreateLogger();
         
@@ -55,6 +53,7 @@ public static class Startup
         services.AddTransient<IClientRepository, ClientRepository>();
         services.AddTransient<IUserRepository, UserRepository>();
         services.AddTransient<IBuildCodeRepository, BuildCodeRepository>();
+        services.AddTransient<IBuilderApplicationRepository, BuilderApplicationRepository>();
     }
     
     internal static void ConfigureServices(this IServiceCollection services)
@@ -63,6 +62,7 @@ public static class Startup
         services.AddTransient<IUserService, UserService>();
         services.AddTransient<IClientAuthService, ClientAuthService>();
         services.AddTransient<IBuildCodeService, BuildCodeService>();
+        services.AddTransient<IBuilderApplicationService, BuilderApplicationService>();
     }
 
     internal static void ConfigureCaching(this IServiceCollection services)
