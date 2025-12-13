@@ -10,7 +10,7 @@ using Microsoft.Extensions.Logging;
 
 namespace GreenfieldCoreServices.Services;
 
-public class BuilderApplicationService(IUnitOfWork uow, IUserService userService, ILogger<BuilderApplicationService> logger) : IBuilderApplicationService
+public class BuilderApplicationService(IUnitOfWork uow, IUserService userService, ILogger<BuilderApplicationService> logger, ICacheService<long, BuilderApplication> buildAppCache) : IBuilderApplicationService
 {
     public async Task<Result<long>> SubmitApplication(
         ulong discordSnowflake,
@@ -96,8 +96,12 @@ public class BuilderApplicationService(IUnitOfWork uow, IUserService userService
             if (!statusInsertResult.IsSuccessful)
                 logger.LogWarning("Failed to insert initial status for builder application {ApplicationId}. {Error}", applicationId, statusInsertResult.ErrorMessage);
             
-
             uow.CompleteAndCommit();
+            
+            var cacheResult = await GetApplicationInternal(applicationId, true, application, builderRepo);
+            if (!cacheResult.IsSuccessful)
+                logger.LogWarning("Failed to cache builder application {ApplicationId} after submission. {Error}", applicationId, cacheResult.ErrorMessage);
+            
             return Result<long>.Success(applicationId);
         }
         catch (Exception ex)
@@ -120,32 +124,37 @@ public class BuilderApplicationService(IUnitOfWork uow, IUserService userService
         }
 
         uow.CompleteAndCommit();
+
+        if (buildAppCache.TryGetValue(applicationId, out var cachedApplication))
+        {
+            var refreshedStatusesResult = await builderRepo.GetStatusesByApplication(applicationId);
+            if (refreshedStatusesResult.IsSuccessful)
+            {
+                cachedApplication.BuildAppStatuses = refreshedStatusesResult
+                    .GetNonNullOrThrow()
+                    .Select(s => new BuildAppStatus(s.Status, s.StatusMessage, s.CreatedOn))
+                    .ToList();
+            }
+            else
+            {
+                logger.LogWarning("Failed to refresh cache statuses for builder application {ApplicationId}. {Error}", applicationId, refreshedStatusesResult.ErrorMessage);
+                cachedApplication.BuildAppStatuses.Add(new BuildAppStatus(status, statusMessage, DateTime.UtcNow));
+            }
+
+            buildAppCache.SetValue(applicationId, cachedApplication);
+        }
+        else
+        {
+            var cacheRefreshResult = await GetApplicationInternal(applicationId, true, null, builderRepo);
+            if (!cacheRefreshResult.IsSuccessful)
+                logger.LogWarning("Failed to cache builder application {ApplicationId} after status update. {Error}", applicationId, cacheRefreshResult.ErrorMessage);
+        }
+
         return Result<bool>.Success(true);
     }
 
-    public async Task<Result<BuilderApplication>> GetApplicationById(long applicationId)
-    {
-        var builderRepo = uow.Repository<IBuilderApplicationRepository>();
-        var applicationResult = await builderRepo.GetApplicationById(applicationId);
-
-        if (!applicationResult.IsSuccessful)
-            return Result<BuilderApplication>.Failure(applicationResult.ErrorMessage ?? "Failed to retrieve application.", applicationResult.StatusCode);
-        
-        var application = applicationResult.GetNonNullOrThrow();
-        
-        var statusesResult = await builderRepo.GetStatusesByApplication(applicationId);
-        if (!statusesResult.IsSuccessful)
-            return Result<BuilderApplication>.Failure(statusesResult.ErrorMessage ?? "Failed to retrieve application statuses.", statusesResult.StatusCode);
-        
-        var imagesResult = await builderRepo.GetApplicationImages(applicationId);
-        if (!imagesResult.IsSuccessful)
-            return Result<BuilderApplication>.Failure(imagesResult.ErrorMessage ?? "Failed to retrieve application images.", imagesResult.StatusCode);
-        
-        var images = imagesResult.GetNonNullOrThrow().ToList();
-        var statuses = statusesResult.GetNonNullOrThrow();
-        
-        return Result<BuilderApplication>.Success(MapApplicationEntityToModel(application, statuses.ToList(), images));
-    }
+    public Task<Result<BuilderApplication>> GetApplicationById(long applicationId) =>
+        GetApplicationInternal(applicationId);
 
     public async Task<Result<List<BuilderApplication>>> GetApplicationsFromUser(long userId)
     {
@@ -159,22 +168,49 @@ public class BuilderApplicationService(IUnitOfWork uow, IUserService userService
         
         foreach (var appEntity in userApps)
         {
-            var statusesResult = await builderRepo.GetStatusesByApplication(appEntity.ApplicationId);
-            if (!statusesResult.IsSuccessful)
-                return Result<List<BuilderApplication>>.Failure(statusesResult.ErrorMessage ?? "Failed to retrieve application statuses.", statusesResult.StatusCode);
+            var appResult = await GetApplicationInternal(appEntity.ApplicationId, false, appEntity, builderRepo);
+            if (!appResult.IsSuccessful)
+                return Result<List<BuilderApplication>>.Failure(appResult.ErrorMessage ?? "Failed to retrieve application.", appResult.StatusCode);
             
-            var imagesResult = await builderRepo.GetApplicationImages(appEntity.ApplicationId);
-            if (!imagesResult.IsSuccessful)
-                return Result<List<BuilderApplication>>.Failure(imagesResult.ErrorMessage ?? "Failed to retrieve application images.", imagesResult.StatusCode);
-            
-            var images = imagesResult.GetNonNullOrThrow().ToList();
-            var statuses = statusesResult.GetNonNullOrThrow();
-            
-            var appModel = MapApplicationEntityToModel(appEntity, statuses.ToList(), images);
-            applications.Add(appModel);
+            applications.Add(appResult.GetNonNullOrThrow());
         }
         
         return Result<List<BuilderApplication>>.Success(applications);
+    }
+
+    private async Task<Result<BuilderApplication>> GetApplicationInternal(long applicationId, bool bypassCache = false, BuilderApplicationEntity? existingEntity = null, IBuilderApplicationRepository? repository = null)
+    {
+        if (!bypassCache && buildAppCache.TryGetValue(applicationId, out var cachedApplication))
+            return Result<BuilderApplication>.Success(cachedApplication);
+        
+        var builderRepo = repository ?? uow.Repository<IBuilderApplicationRepository>();
+        BuilderApplicationEntity applicationEntity;
+        
+        if (existingEntity is not null) applicationEntity = existingEntity;
+        else
+        {
+            var applicationResult = await builderRepo.GetApplicationById(applicationId);
+
+            if (!applicationResult.IsSuccessful)
+                return Result<BuilderApplication>.Failure(applicationResult.ErrorMessage ?? "Failed to retrieve application.", applicationResult.StatusCode);
+            
+            applicationEntity = applicationResult.GetNonNullOrThrow();
+        }
+        
+        var statusesResult = await builderRepo.GetStatusesByApplication(applicationId);
+        if (!statusesResult.IsSuccessful)
+            return Result<BuilderApplication>.Failure(statusesResult.ErrorMessage ?? "Failed to retrieve application statuses.", statusesResult.StatusCode);
+        
+        var imagesResult = await builderRepo.GetApplicationImages(applicationId);
+        if (!imagesResult.IsSuccessful)
+            return Result<BuilderApplication>.Failure(imagesResult.ErrorMessage ?? "Failed to retrieve application images.", imagesResult.StatusCode);
+        
+        var images = imagesResult.GetNonNullOrThrow().ToList();
+        var statuses = statusesResult.GetNonNullOrThrow().ToList();
+        
+        var applicationModel = MapApplicationEntityToModel(applicationEntity, statuses, images);
+        buildAppCache.SetValue(applicationId, applicationModel);
+        return Result<BuilderApplication>.Success(applicationModel);
     }
 
     private BuilderApplication MapApplicationEntityToModel(BuilderApplicationEntity entity,
@@ -227,4 +263,3 @@ public class BuilderApplicationService(IUnitOfWork uow, IUserService userService
         return await userService.LinkDiscordAccount(userId, discordSnowflake);
     }
 }
-

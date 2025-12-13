@@ -7,6 +7,7 @@ using GreenfieldCoreDataAccess.Database.Repositories.Interfaces;
 using GreenfieldCoreDataAccess.Database.ScriptManager;
 using GreenfieldCoreDataAccess.Database.UnitOfWork;
 using GreenfieldCoreServices.Commands;
+using GreenfieldCoreServices.Models.BuildApps;
 using GreenfieldCoreServices.Models.BuildCodes;
 using GreenfieldCoreServices.Models.Clients;
 using GreenfieldCoreServices.Models.Users;
@@ -71,6 +72,7 @@ public static class Startup
         services.AddSingleton<ICacheService<long, BuildCode>, BuildCodeCacheService>();
         services.AddSingleton<ICacheService<long, User>, UserCacheService>();
         services.AddSingleton<ICacheService<long, List<ulong>>, UserDiscordCacheService>();
+        services.AddSingleton<ICacheService<long, BuilderApplication>, BuildAppCacheService>();
     }
 
     internal static void ConfigureConfiguration(this IConfigurationBuilder configBuilder, IWebHostEnvironment env)
