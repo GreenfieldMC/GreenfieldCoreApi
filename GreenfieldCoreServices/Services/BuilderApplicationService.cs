@@ -1,5 +1,4 @@
 using System.Net;
-using System.Linq;
 using GreenfieldCoreDataAccess.Database.Models;
 using GreenfieldCoreDataAccess.Database.Repositories.Interfaces;
 using GreenfieldCoreDataAccess.Database.UnitOfWork;
@@ -36,25 +35,6 @@ public class BuilderApplicationService(IUnitOfWork uow, IUserService userService
         if (!discordLinkResult.IsSuccessful)
             return Result<long>.Failure(discordLinkResult.ErrorMessage ?? "Failed to link Discord account.", discordLinkResult.StatusCode);
 
-        var applicationsResult = await builderRepo.GetApplicationsByUser(user.UserId);
-        if (!applicationsResult.IsSuccessful)
-            return Result<long>.Failure(applicationsResult.ErrorMessage ?? "Failed to retrieve existing applications.", applicationsResult.StatusCode);
-
-        var applications = applicationsResult.GetNonNullOrThrow("GetApplicationsByUser returned null unexpectedly.");
-        foreach (var application in applications)
-        {
-            var statusResult = await builderRepo.GetStatusesByApplication(application.ApplicationId);
-            if (!statusResult.IsSuccessful)
-                return Result<long>.Failure(statusResult.ErrorMessage ?? "Failed to retrieve application statuses.", statusResult.StatusCode);
-
-            var statuses = statusResult.GetNonNullOrThrow("GetStatusesByApplication returned null unexpectedly.").ToList();
-            if (statuses.Any(s => string.Equals(s.Status, "UnderReview", StringComparison.OrdinalIgnoreCase)))
-                return Result<long>.Failure("An application is already under review for this user.", HttpStatusCode.Conflict);
-
-            if (statuses.Any(s => string.Equals(s.Status, "Approved", StringComparison.OrdinalIgnoreCase)))
-                return Result<long>.Failure("An application for this Minecraft UUID has already been approved.", HttpStatusCode.Conflict);
-        }
-
         uow.BeginTransaction();
         try
         {
@@ -71,14 +51,15 @@ public class BuilderApplicationService(IUnitOfWork uow, IUserService userService
 
             var application = applicationInsertResult.GetNonNullOrThrow();
             var applicationId = application.ApplicationId;
+            var linkedImages = new List<BuilderAppImageLinkEntity>();
 
             if (houseBuildLinks.Count > 0)
             {
                 foreach (var link in houseBuildLinks.Where(link => !string.IsNullOrWhiteSpace(link)))
                 {
                     var imageResult = await builderRepo.InsertImage(applicationId, "House", link);
-                    if (imageResult.IsSuccessful) continue;
-                    logger.LogWarning("Failed to insert house image for builder application {ApplicationId} (link: {Link}). {Error}", applicationId, link, imageResult.ErrorMessage);
+                    if (imageResult.IsSuccessful) linkedImages.Add(imageResult.GetNonNullOrThrow());
+                    else logger.LogWarning("Failed to insert house image for builder application {ApplicationId} (link: {Link}). {Error}", applicationId, link, imageResult.ErrorMessage);
                 }
             }
 
@@ -87,20 +68,15 @@ public class BuilderApplicationService(IUnitOfWork uow, IUserService userService
                 foreach (var link in otherBuildLinks.Where(link => !string.IsNullOrWhiteSpace(link)))
                 {
                     var imageResult = await builderRepo.InsertImage(applicationId, "Other", link);
-                    if (imageResult.IsSuccessful) continue;
-                    logger.LogWarning("Failed to insert other image for builder application {ApplicationId} (link: {Link}). {Error}", applicationId, link, imageResult.ErrorMessage);
+                    if (imageResult.IsSuccessful) linkedImages.Add(imageResult.GetNonNullOrThrow());
+                    else logger.LogWarning("Failed to insert other image for builder application {ApplicationId} (link: {Link}). {Error}", applicationId, link, imageResult.ErrorMessage);
                 }
             }
-
-            var statusInsertResult = await builderRepo.InsertStatus(applicationId, "UnderReview", null);
-            if (!statusInsertResult.IsSuccessful)
-                logger.LogWarning("Failed to insert initial status for builder application {ApplicationId}. {Error}", applicationId, statusInsertResult.ErrorMessage);
             
             uow.CompleteAndCommit();
             
-            var cacheResult = await GetApplicationInternal(applicationId, true, application, builderRepo);
-            if (!cacheResult.IsSuccessful)
-                logger.LogWarning("Failed to cache builder application {ApplicationId} after submission. {Error}", applicationId, cacheResult.ErrorMessage);
+            var mapped = MapApplicationEntityToModel(user, application, [], linkedImages);
+            buildAppCache.SetValue(applicationId, mapped);
             
             return Result<long>.Success(applicationId);
         }
@@ -156,26 +132,25 @@ public class BuilderApplicationService(IUnitOfWork uow, IUserService userService
     public Task<Result<BuilderApplication>> GetApplicationById(long applicationId) =>
         GetApplicationInternal(applicationId);
 
-    public async Task<Result<List<BuilderApplication>>> GetApplicationsFromUser(long userId)
+    public async Task<Result<List<ApplicationLatestStatus>>> GetApplicationsFromUser(long userId)
     {
         var builderRepo = uow.Repository<IBuilderApplicationRepository>();
-        var userAppsResult = await builderRepo.GetApplicationsByUser(userId);
-        if (!userAppsResult.IsSuccessful)
-            return Result<List<BuilderApplication>>.Failure(userAppsResult.ErrorMessage ?? "Failed to retrieve user applications.", userAppsResult.StatusCode);
-        
-        var userApps = userAppsResult.GetNonNullOrThrow();
-        var applications = new List<BuilderApplication>();
-        
-        foreach (var appEntity in userApps)
-        {
-            var appResult = await GetApplicationInternal(appEntity.ApplicationId, false, appEntity, builderRepo);
-            if (!appResult.IsSuccessful)
-                return Result<List<BuilderApplication>>.Failure(appResult.ErrorMessage ?? "Failed to retrieve application.", appResult.StatusCode);
-            
-            applications.Add(appResult.GetNonNullOrThrow());
-        }
-        
-        return Result<List<BuilderApplication>>.Success(applications);
+        var latestResult = await builderRepo.GetApplicationsWithLatestStatusByUser(userId);
+        if (!latestResult.IsSuccessful)
+            return Result<List<ApplicationLatestStatus>>.Failure(latestResult.ErrorMessage ?? "Failed to retrieve user applications with latest status.", latestResult.StatusCode);
+
+        var rows = latestResult.GetNonNullOrThrow().ToList();
+        var results = rows
+            .Select(r => new ApplicationLatestStatus
+            {
+                ApplicationId = r.ApplicationId,
+                LatestStatus = r.Status is not null && r.CreatedOn is not null
+                    ? new BuildAppStatus(r.Status, r.StatusMessage, r.CreatedOn.Value)
+                    : null
+            })
+            .ToList();
+
+        return Result<List<ApplicationLatestStatus>>.Success(results);
     }
 
     private async Task<Result<BuilderApplication>> GetApplicationInternal(long applicationId, bool bypassCache = false, BuilderApplicationEntity? existingEntity = null, IBuilderApplicationRepository? repository = null)
@@ -205,22 +180,28 @@ public class BuilderApplicationService(IUnitOfWork uow, IUserService userService
         if (!imagesResult.IsSuccessful)
             return Result<BuilderApplication>.Failure(imagesResult.ErrorMessage ?? "Failed to retrieve application images.", imagesResult.StatusCode);
         
+        var userResult = await userService.GetUserByUserId(applicationEntity.UserId);
+        if (!userResult.IsSuccessful)
+            return Result<BuilderApplication>.Failure(userResult.ErrorMessage ?? "Failed to retrieve application user.", userResult.StatusCode);
+        
         var images = imagesResult.GetNonNullOrThrow().ToList();
         var statuses = statusesResult.GetNonNullOrThrow().ToList();
+        var user = userResult.GetNonNullOrThrow();
         
-        var applicationModel = MapApplicationEntityToModel(applicationEntity, statuses, images);
+        var applicationModel = MapApplicationEntityToModel(user, applicationEntity, statuses, images);
         buildAppCache.SetValue(applicationId, applicationModel);
         return Result<BuilderApplication>.Success(applicationModel);
     }
 
-    private BuilderApplication MapApplicationEntityToModel(BuilderApplicationEntity entity,
+    private BuilderApplication MapApplicationEntityToModel(User user, 
+        BuilderApplicationEntity entity,
         List<BuilderAppStatusEntity> statuses,
         List<BuilderAppImageLinkEntity> images)
     {
         return new BuilderApplication
         {
             ApplicationId = entity.ApplicationId,
-            UserId = entity.UserId,
+            User = user,
             Age = entity.UserAge,
             Nationality = entity.UserNationality,
             AdditionalBuildingInformation = entity.AdditionalBuildingInformation,
@@ -232,11 +213,11 @@ public class BuilderApplicationService(IUnitOfWork uow, IUserService userService
                 .ToList(),
             HouseBuilds = images
                 .Where(img => string.Equals(img.LinkType, "House", StringComparison.OrdinalIgnoreCase))
-                .Select(img => new BuildAppImage(img.LinkType, img.ImageLink, img.CreatedOn))
+                .Select(img => new BuildAppImage(img.ImageLink, img.LinkType, img.CreatedOn))
                 .ToList(),
             OtherBuilds = images
                 .Where(img => string.Equals(img.LinkType, "Other", StringComparison.OrdinalIgnoreCase))
-                .Select(img => new BuildAppImage(img.LinkType, img.ImageLink, img.CreatedOn))
+                .Select(img => new BuildAppImage(img.ImageLink, img.LinkType, img.CreatedOn))
                 .ToList()
         };
     }

@@ -12,5 +12,14 @@ begin
         p_ApplicationId,
         p_LinkType,
         p_ImageLink);
+
+    select 
+        bali.BuilderAppImageLinkId,
+        bali.ApplicationId,
+        bali.LinkType,
+        bali.ImageLink,
+        bali.CreatedOn
+    from BuilderAppImageLinks bali
+    where bali.BuilderAppImageLinkId = last_insert_id();
 end;
 

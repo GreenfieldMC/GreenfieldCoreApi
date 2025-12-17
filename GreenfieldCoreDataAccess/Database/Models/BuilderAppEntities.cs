@@ -25,11 +25,10 @@ public record BuilderAppStatusEntity(
     string Status,
     string? StatusMessage,
     DateTime CreatedOn);
-
-public record BuilderApplicationInsertResult(
-    BuilderApplicationEntity Application,
-    IReadOnlyList<Result<string>> FailedImageLinks)
-{
-    public static BuilderApplicationInsertResult From(BuilderApplicationEntity application, IEnumerable<Result<string>> failedImages)
-        => new(application, failedImages.ToList());
-}
+    
+public record LatestBuildAppStatusEntity(
+    long ApplicationId,
+    long? BuilderAppStatusId,
+    string? Status,
+    string? StatusMessage,
+    DateTime? CreatedOn);

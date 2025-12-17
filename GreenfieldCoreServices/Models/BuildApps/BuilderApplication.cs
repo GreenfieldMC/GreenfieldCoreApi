@@ -1,10 +1,12 @@
+using GreenfieldCoreServices.Models.Users;
+
 namespace GreenfieldCoreServices.Models.BuildApps;
 
 public class BuilderApplication
 {
     public required long ApplicationId { get; set; }
     public required List<BuildAppStatus> BuildAppStatuses { get; set; }
-    public required long UserId { get; set; }
+    public required User User { get; set; }
     public required int Age { get; set; }
     public string? Nationality { get; set; }
     public required List<BuildAppImage> HouseBuilds { get; set; }

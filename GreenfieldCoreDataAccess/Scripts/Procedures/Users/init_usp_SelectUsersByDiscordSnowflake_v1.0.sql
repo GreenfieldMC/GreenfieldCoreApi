@@ -1,6 +1,6 @@
 -- DependsOn: ScriptHistory, Users, UserDiscord
 create procedure if not exists usp_SelectUsersByDiscordSnowflake(
-    p_DiscordSnowflake bigint)
+    p_DiscordSnowflake bigint unsigned)
 begin
     select u.UserId, u.MinecraftUuid, u.MinecraftUsername, u.CreatedOn
     from Users u

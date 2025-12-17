@@ -15,6 +15,6 @@ public interface IBuilderApplicationService
     
     Task<Result<BuilderApplication>> GetApplicationById(long applicationId);
     
-    Task<Result<List<BuilderApplication>>> GetApplicationsFromUser(long userId);
+    Task<Result<List<ApplicationLatestStatus>>> GetApplicationsFromUser(long userId);
 
 }

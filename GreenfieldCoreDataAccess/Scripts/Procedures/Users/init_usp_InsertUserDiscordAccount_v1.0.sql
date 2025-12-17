@@ -1,7 +1,7 @@
 -- DependsOn: ScriptHistory, Users, UserDiscord
 create procedure if not exists usp_InsertUserDiscordAccount(
     p_UserId bigint,
-    p_DiscordSnowflake bigint)
+    p_DiscordSnowflake bigint unsigned)
 begin
     -- Attempt insert; ignore if UserId and DiscordSnowflake combination already exists
     insert ignore into UserDiscord (UserId, DiscordSnowflake)

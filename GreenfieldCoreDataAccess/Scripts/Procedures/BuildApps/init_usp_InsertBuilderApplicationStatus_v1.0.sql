@@ -12,5 +12,14 @@ begin
         p_ApplicationId,
         p_Status,
         p_StatusMessage);
+
+    select 
+        bas.BuilderAppStatusId,
+        bas.ApplicationId,
+        bas.Status,
+        bas.StatusMessage,
+        bas.CreatedOn
+    from BuilderAppStatus bas
+    where bas.BuilderAppStatusId = last_insert_id();
 end;
 

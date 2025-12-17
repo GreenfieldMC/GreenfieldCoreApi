@@ -18,6 +18,7 @@ public class BuilderApplicationRepository(IUnitOfWork unitOfWork) : BaseReposito
     private const string SelectBuilderAppImagesProc = "usp_SelectBuilderApplicationImages";
     private const string SelectBuilderAppStatusesProc = "usp_SelectBuilderApplicationStatuses";
     private const string SelectBuilderAppByIdProc = "usp_SelectBuilderApplicationById";
+    private const string SelectBuilderAppsWithLatestStatusByUserProc = "usp_SelectBuilderApplicationsWithLatestStatusByUser";
 
     public async Task<Result<IEnumerable<BuilderApplicationEntity>>> GetApplicationsByUser(long userId)
     {
@@ -64,6 +65,22 @@ public class BuilderApplicationRepository(IUnitOfWork unitOfWork) : BaseReposito
         }
     }
 
+    public async Task<Result<IEnumerable<LatestBuildAppStatusEntity>>> GetApplicationsWithLatestStatusByUser(long userId)
+    {
+        var parameters = new DynamicParameters();
+        parameters.Add("p_UserId", userId, DbType.Int64);
+        try
+        {
+            // Expect the stored procedure to return application columns plus nullable status columns. We map manually.
+            var rows = await Connection.QueryAsync<LatestBuildAppStatusEntity>(SelectBuilderAppsWithLatestStatusByUserProc, parameters, commandType: CommandType.StoredProcedure, transaction: Transaction);
+            return Result<IEnumerable<LatestBuildAppStatusEntity>>.Success(rows);
+        }
+        catch (DbException ex)
+        {
+            return Result<IEnumerable<LatestBuildAppStatusEntity>>.Failure($"Failed to retrieve builder applications with latest status: {ex.Message}", HttpStatusCode.InternalServerError);
+        }
+    }
+
     public async Task<Result<BuilderApplicationEntity>> InsertApplication(
         long userId,
         int userAge,
@@ -91,7 +108,7 @@ public class BuilderApplicationRepository(IUnitOfWork unitOfWork) : BaseReposito
         }
     }
 
-    public async Task<Result<bool>> InsertStatus(long applicationId, string status, string? statusMessage)
+    public async Task<Result<BuilderAppStatusEntity>> InsertStatus(long applicationId, string status, string? statusMessage)
     {
         var parameters = new DynamicParameters();
         parameters.Add("p_ApplicationId", applicationId, DbType.Int64);
@@ -99,16 +116,16 @@ public class BuilderApplicationRepository(IUnitOfWork unitOfWork) : BaseReposito
         parameters.Add("p_StatusMessage", statusMessage, DbType.String, size: 4096);
         try
         {
-            var rows = await Connection.ExecuteAsync(InsertBuilderAppStatusProc, parameters, commandType: CommandType.StoredProcedure, transaction: Transaction);
-            return Result<bool>.Success(rows > 0);
+            var statusRow = await Connection.QuerySingleAsync<BuilderAppStatusEntity>(InsertBuilderAppStatusProc, parameters, commandType: CommandType.StoredProcedure, transaction: Transaction);
+            return Result<BuilderAppStatusEntity>.Success(statusRow);
         }
         catch (DbException ex)
         {
-            return Result<bool>.Failure($"Failed to insert builder application status: {ex.Message}", HttpStatusCode.InternalServerError);
+            return Result<BuilderAppStatusEntity>.Failure($"Failed to insert builder application status: {ex.Message}", HttpStatusCode.InternalServerError);
         }
     }
 
-    public async Task<Result<bool>> InsertImage(long applicationId, string linkType, string imageLink)
+    public async Task<Result<BuilderAppImageLinkEntity>> InsertImage(long applicationId, string linkType, string imageLink)
     {
         var parameters = new DynamicParameters();
         parameters.Add("p_ApplicationId", applicationId, DbType.Int64);
@@ -116,12 +133,12 @@ public class BuilderApplicationRepository(IUnitOfWork unitOfWork) : BaseReposito
         parameters.Add("p_ImageLink", imageLink, DbType.String, size: 2048);
         try
         {
-            var rows = await Connection.ExecuteAsync(InsertBuilderAppImageProc, parameters, commandType: CommandType.StoredProcedure, transaction: Transaction);
-            return Result<bool>.Success(rows > 0);
+            var imageRow = await Connection.QuerySingleAsync<BuilderAppImageLinkEntity>(InsertBuilderAppImageProc, parameters, commandType: CommandType.StoredProcedure, transaction: Transaction);
+            return Result<BuilderAppImageLinkEntity>.Success(imageRow);
         }
         catch (DbException ex)
         {
-            return Result<bool>.Failure(ex.Message, HttpStatusCode.InternalServerError);
+            return Result<BuilderAppImageLinkEntity>.Failure(ex.Message, HttpStatusCode.InternalServerError);
         }
     }
 

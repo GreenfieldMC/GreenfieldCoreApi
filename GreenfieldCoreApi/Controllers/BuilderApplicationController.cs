@@ -44,7 +44,7 @@ public class BuilderApplicationController(IBuilderApplicationService buildAppSer
     [Authorize(Roles = "BuilderApplications.Read")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    [Produces(typeof(IEnumerable<BuilderApplication>))]
+    [Produces(typeof(IEnumerable<ApplicationLatestStatus>))]
     public async Task<IActionResult> GetApplicationsFromUser(long userId)
     {
         var appsResult = await buildAppService.GetApplicationsFromUser(userId);
