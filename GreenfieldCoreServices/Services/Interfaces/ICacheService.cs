@@ -16,9 +16,17 @@ public interface ICacheService<TKey, TValue>
     /// Tries to get a value from the cache by predicate.
     /// </summary>
     /// <param name="predicate">The predicate to match.</param>
-    /// <param name="value">The value that matches the predicate, or null if not found.</param>
+    /// <param name="value">The first value that matches the predicate, or null if not found.</param>
     /// <returns>>True if a matching value was found; otherwise, false.</returns>
     bool TryGetValue(Func<TValue, bool> predicate, [MaybeNullWhen(false)] out TValue value);
+    
+    /// <summary>
+    /// Tries to get multiple values from the cache by predicate.
+    /// </summary>
+    /// <param name="predicate">The predicate to match.</param>
+    /// <param name="values">The values that match the predicate, or null if none found.</param>
+    /// <returns>True if matching values were found; otherwise, false.</returns>
+    bool TryGetValues(Func<TValue, bool> predicate, [MaybeNullWhen(false)] out IEnumerable<TValue> values);
     
     /// <summary>
     /// Get a copy of the entire cache dictionary.
@@ -56,6 +64,12 @@ public interface ICacheService<TKey, TValue>
     /// </summary>
     /// <param name="key">The key to remove.</param>
     void RemoveValue(TKey key);
+    
+    /// <summary>
+    /// Removes values from the cache that match the given predicate.
+    /// </summary>
+    /// <param name="predicate">The predicate to match.</param>
+    void RemoveValues(Func<TValue, bool> predicate);
     
     /// <summary>
     /// Clears the entire cache.

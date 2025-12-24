@@ -16,6 +16,19 @@ public class BaseCacheService<TKey, TValue> : ICacheService<TKey, TValue> where 
         ? (value = foundValue) != null
         : (value = default!) != null;
 
+    public bool TryGetValues(Func<TValue, bool> predicate, out IEnumerable<TValue> values)         
+    {
+        var foundValues = _cache.Values.Where(predicate).ToImmutableList();
+        if (!foundValues.IsEmpty)
+        {
+            values = foundValues; 
+            return true;
+        }
+
+        values = [];
+        return false;
+    }
+
     public IDictionary<TKey, TValue> GetDictionary() => _cache.ToImmutableDictionary();
 
     public IEnumerable<TKey> GetKeys() => _cache.Keys.ToImmutableList();
@@ -28,5 +41,14 @@ public class BaseCacheService<TKey, TValue> : ICacheService<TKey, TValue> where 
 
     public void RemoveValue(TKey key) => _cache.Remove(key);
     
+    public void RemoveValues(Func<TValue, bool> predicate)
+    {
+        var keysToRemove = _cache.Where(kv => predicate(kv.Value)).Select(kv => kv.Key).ToList();
+        foreach (var key in keysToRemove)
+        {
+            _cache.Remove(key);
+        }
+    }
+
     public void ClearCache() => _cache.Clear();
 }

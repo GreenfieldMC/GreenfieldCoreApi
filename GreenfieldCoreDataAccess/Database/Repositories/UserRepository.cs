@@ -24,6 +24,7 @@ public class UserRepository(IUnitOfWork uow) : BaseRepository(uow), IUserReposit
     private const string UpdateUserPatreonTokensProc = "usp_UpdateUserPatreonTokens";
     private const string DeleteUserPatreonAccountProc = "usp_DeleteUserPatreonAccount";
     private const string UpdateUserPatreonPledgeProc = "usp_UpdateUserPatreonPledge";
+    private const string SelectUserPatreonAccountProc = "usp_SelectUserPatreonAccount";
     
     public async Task<Result<UserEntity?>> GetUserByUserId(long userId)
     {
@@ -211,6 +212,21 @@ public class UserRepository(IUnitOfWork uow) : BaseRepository(uow), IUserReposit
                 : Result<UserPatreonEntity>.Success(result);
         } catch (DbException ex) {
             return Result<UserPatreonEntity>.Failure($"Failed to update user patreon pledge: {ex.Message}");
+        }
+    }
+
+    public async Task<Result<UserPatreonEntity>> GetUserPatreonAccount(long userId, long patreonId)
+    {
+        var parameters = new DynamicParameters();
+        parameters.Add("p_UserId", userId, DbType.Int64);
+        parameters.Add("p_PatreonId", patreonId, DbType.Int64);
+        try {
+            var result = await Connection.QuerySingleOrDefaultAsync<UserPatreonEntity?>(SelectUserPatreonAccountProc, parameters, commandType: CommandType.StoredProcedure, transaction: Transaction);
+            return result is null
+                ? Result<UserPatreonEntity>.Failure("Failed to get user patreon account.")
+                : Result<UserPatreonEntity>.Success(result);
+        } catch (DbException ex) {
+            return Result<UserPatreonEntity>.Failure($"Failed to get user patreon account: {ex.Message}");
         }
     }
 }

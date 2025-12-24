@@ -72,5 +72,66 @@ public interface IUserService
     /// <param name="discordSnowflake">The Discord snowflake ID.</param>
     /// <returns>The list of linked users (empty when no matches).</returns>
     public Task<Result<IEnumerable<User>>> GetUsersByDiscordSnowflake(ulong discordSnowflake);
+
+    /// <summary>
+    /// Links a Patreon account to a user.
+    /// </summary>
+    /// <param name="userId">The internal user ID</param>
+    /// <param name="patreonId">The Patreon ID</param>
+    /// <param name="refreshToken">The refresh token</param>
+    /// <param name="accessToken">The access token</param>
+    /// <param name="tokenType">The token type</param>
+    /// <param name="tokenExpiry">The token expiry date</param>
+    /// <param name="scope">The scope</param>
+    /// <param name="pledge">The pledge amount</param>
+    /// <returns>The linked UserPatreonAccount</returns>
+    public Task<Result<UserPatreonAccount>> LinkPatreonAccount(long userId, long patreonId, string refreshToken,
+        string accessToken, string tokenType, DateTime tokenExpiry, string scope, decimal? pledge);
+
+    /// <summary>
+    /// Unlinks a Patreon account from a user.
+    /// </summary>
+    /// <param name="userId">The internal user ID</param>
+    /// <param name="patreonId">The Patreon ID</param>
+    /// <returns></returns>
+    public Task<Result> UnlinkPatreonAccount(long userId, long patreonId);
+    
+    /// <summary>
+    /// Gets all linked Patreon accounts for a given user.
+    /// </summary>
+    /// <param name="userId">The internal user ID</param>
+    /// <returns>A list of linked UserPatreonAccount objects</returns>
+    public Task<Result<IEnumerable<UserPatreonAccount>>> GetPatreonAccountsByUserId(long userId);
+    
+    /// <summary>
+    /// Gets a linked Patreon account by Patreon ID for a given user.
+    /// </summary>
+    /// <param name="userId">The internal user ID</param>
+    /// <param name="patreonId">The Patreon ID</param>
+    /// <returns></returns>
+    public Task<Result<UserPatreonAccount>> GetPatreonAccountByPatreonId(long userId, long patreonId);
+    
+    /// <summary>
+    /// Updates the tokens for a linked Patreon account.
+    /// </summary>
+    /// <param name="userId">The internal user ID</param>
+    /// <param name="patreonId">The Patreon ID</param>
+    /// <param name="refreshToken">The refresh token</param>
+    /// <param name="accessToken">The access token</param>
+    /// <param name="tokenType">The token type</param>
+    /// <param name="tokenExpiry">The token expiry date</param>
+    /// <param name="scope">The scope</param>
+    /// <returns></returns>
+    public Task<Result<UserPatreonAccount>> UpdatePatreonAccountTokens(long userId, long patreonId, string refreshToken,
+        string accessToken, string tokenType, DateTime tokenExpiry, string scope);
+    
+    /// <summary>
+    /// Updates the pledge amount for a linked Patreon account.
+    /// </summary>
+    /// <param name="userId">The internal user ID</param>
+    /// <param name="patreonId">The Patreon ID</param>
+    /// <param name="pledge">The new pledge amount</param>
+    /// <returns></returns>
+    public Task<Result<UserPatreonAccount>> UpdatePatreonPledgeAmount(long userId, long patreonId, decimal? pledge);
     
 }

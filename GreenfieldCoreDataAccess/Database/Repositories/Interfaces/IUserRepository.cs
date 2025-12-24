@@ -118,4 +118,12 @@ public interface IUserRepository
     /// <returns></returns>
     Task<Result<UserPatreonEntity>> UpdateUserPatreonPledge(long userId, long patreonId, decimal? pledge);
 
+    /// <summary>
+    /// Get a user's Patreon account by their internal user ID and Patreon ID.
+    /// </summary>
+    /// <param name="userId">The internal user ID</param>
+    /// <param name="patreonId">The Patreon ID</param>
+    /// <returns></returns>
+    Task<Result<UserPatreonEntity>> GetUserPatreonAccount(long userId, long patreonId);
+
 }
