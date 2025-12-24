@@ -65,4 +65,57 @@ public interface IUserRepository
     /// <returns>Result containing the linked user entities (empty when none found).</returns>
     Task<Result<IEnumerable<UserEntity>>> GetUsersByDiscordSnowflake(ulong discordSnowflake);
 
+    /// <summary>
+    /// Create a reference between a user and their Patreon account.
+    /// </summary>
+    /// <param name="userId">The internal user ID</param>
+    /// <param name="patreonId">The Patreon ID</param>
+    /// <param name="refreshToken">The refresh token</param>
+    /// <param name="accessToken">The access token</param>
+    /// <param name="tokenType">The token type</param>
+    /// <param name="tokenExpiry">The token expiry date</param>
+    /// <param name="scope">The scope</param>
+    /// <param name="pledge">The pledge amount</param>
+    /// <returns></returns>
+    Task<Result<UserPatreonEntity>> CreateUserPatreonReference(long userId, long patreonId, string refreshToken, string accessToken,
+        string tokenType, DateTime tokenExpiry, string scope, decimal? pledge);
+    
+    /// <summary>
+    /// Get all Patreon references for a given user by their internal user ID.
+    /// </summary>
+    /// <param name="userId">The internal user ID</param>
+    /// <returns></returns>
+    Task<Result<IEnumerable<UserPatreonEntity>>> GetUserPatreonReferences(long userId);
+
+    /// <summary>
+    /// Update a user's Patreon tokens.
+    /// </summary>
+    /// <param name="userId">The internal user ID</param>
+    /// <param name="patreonId">The Patreon ID</param>
+    /// <param name="refreshToken">The refresh token</param>
+    /// <param name="accessToken">The access token</param>
+    /// <param name="tokenType">The token type</param>
+    /// <param name="tokenExpiry">The token expiry date</param>
+    /// <param name="scope">The scope</param>
+    /// <returns></returns>
+    Task<Result<bool>> UpdateUserPatreonTokens(long userId, long patreonId, string refreshToken, string accessToken,
+        string tokenType, DateTime tokenExpiry, string scope);
+
+    /// <summary>
+    /// Delete a user's Patreon reference.
+    /// </summary>
+    /// <param name="userId">The internal user ID</param>
+    /// <param name="patreonId">The Patreon ID</param>
+    /// <returns></returns>
+    Task<Result<bool>> DeleteUserPatreonReference(long userId, long patreonId);
+    
+    /// <summary>
+    /// Update a user's Patreon pledge amount.
+    /// </summary>
+    /// <param name="userId">The internal user ID</param>
+    /// <param name="patreonId">The Patreon ID</param>
+    /// <param name="pledge">The new pledge amount</param>
+    /// <returns></returns>
+    Task<Result<UserPatreonEntity>> UpdateUserPatreonPledge(long userId, long patreonId, decimal? pledge);
+
 }
