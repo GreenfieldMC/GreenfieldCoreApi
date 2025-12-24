@@ -1,4 +1,5 @@
 using Asp.Versioning;
+using GreenfieldCoreApi.ApiModels;
 using GreenfieldCoreServices.Services.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -138,6 +139,74 @@ public class UserController(IUserService userService) : ControllerBase
         return unlinkResult.IsSuccessful
             ? Ok(true)
             : Problem(statusCode: unlinkResult.GetStatusCodeInt(), detail: unlinkResult.ErrorMessage);
+    }
+
+    [HttpPut("{userId:long}/patreon/{patreonId:long}")]
+    [Authorize(Roles = "Users.Write")]
+    [ProducesResponseType(StatusCodes.Status201Created)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [Produces(typeof(ApiUserPatreonAccount))]
+    public async Task<IActionResult> LinkPatreonAccount([FromRoute] long userId, [FromRoute] long patreonId, [FromBody] LinkPatreonAccountRequest request)
+    {
+        var userResult = await userService.GetUserByUserId(userId);
+        if (!userResult.TryGetDataNonNull(out var user))
+            return Problem(statusCode: userResult.GetStatusCodeInt(), detail: userResult.ErrorMessage);
+        
+        var linkResult = await userService.LinkPatreonAccount(
+            userId,
+            patreonId,
+            request.RefreshToken,
+            request.AccessToken,
+            request.TokenType,
+            request.TokenExpiry,
+            request.Scope,
+            request.Pledge
+        );
+        return !linkResult.TryGetDataNonNull(out var model) 
+            ? Problem(statusCode: linkResult.GetStatusCodeInt(), detail: linkResult.ErrorMessage) 
+            : CreatedAtAction(nameof(GetPatreonAccountsByUserId), new { version = HttpContext.GetRequestedApiVersion()?.ToString(), userId }, new ApiUserPatreonAccount(model.UserPatreonId, user, model.PatreonId, model.Pledge, model.UpdatedOn, model.CreatedOn));
+    }
+
+    [HttpDelete("{userId:long}/patreon/{patreonId:long}")]
+    [Authorize(Roles = "Users.Write")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> UnlinkPatreonAccount([FromRoute] long userId, [FromRoute] long patreonId)
+    {
+        var unlinkResult = await userService.UnlinkPatreonAccount(userId, patreonId);
+        return unlinkResult.IsSuccessful
+            ? Ok()
+            : Problem(statusCode: unlinkResult.GetStatusCodeInt(), detail: unlinkResult.ErrorMessage);
+    }
+
+    [HttpGet("{userId:long}/patreon")]
+    [Authorize(Roles = "Users.Read")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [Produces(typeof(IEnumerable<ApiUserPatreonAccount>))]
+    public async Task<IActionResult> GetPatreonAccountsByUserId([FromRoute] long userId)
+    {
+        var userResult = await userService.GetUserByUserId(userId);
+        if (!userResult.TryGetDataNonNull(out var user))
+            return Problem(statusCode: userResult.GetStatusCodeInt(), detail: userResult.ErrorMessage);
+        
+        var patreonAccountsResult = await userService.GetPatreonAccountsByUserId(userId);
+        if (!patreonAccountsResult.TryGetDataNonNull(out var patreonAccounts))
+            return Problem(statusCode: patreonAccountsResult.GetStatusCodeInt(), detail: patreonAccountsResult.ErrorMessage);
+        
+        var apiModels = patreonAccounts.Select(model => new ApiUserPatreonAccount(
+            model.UserPatreonId,
+            user,
+            model.PatreonId,
+            model.Pledge,
+            model.UpdatedOn,
+            model.CreatedOn
+        ));
+        
+        return Ok(apiModels);
     }
 
 }
