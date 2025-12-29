@@ -1,4 +1,5 @@
 using GreenfieldCoreApi;
+using GreenfieldCoreServices.Services.Tasks;
 using Serilog;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -14,10 +15,12 @@ try
     builder.Services.ConfigureWebServices();
     builder.Services.ConfigureAuthentication(builder.Configuration);
     builder.Services.ConfigureCommandServices();
+    builder.Services.ConfigureScheduledTasks();
 
     var app = builder.Build();
 
     await app.Services.PerformDatabaseMigrations();
+    app.Services.GetRequiredService<TaskStartSignalService>().SignalStart();
 
     app.ConfigureWebApplication();
 

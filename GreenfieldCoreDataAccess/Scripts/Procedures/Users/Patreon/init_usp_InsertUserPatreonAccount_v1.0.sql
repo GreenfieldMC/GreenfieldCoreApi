@@ -7,7 +7,8 @@ create procedure if not exists usp_InsertUserPatreonAccount(
     p_TokenExpiry datetime,
     p_Scope nvarchar(1024),
     p_PatreonId bigint,
-    p_Pledge decimal
+    p_Pledge decimal,
+    p_FullName nvarchar(256)
 ) begin
     insert into UserPatreon (
         UserId,
@@ -17,6 +18,7 @@ create procedure if not exists usp_InsertUserPatreonAccount(
         TokenExpiry,
         Scope,
         PatreonId,
+        FullName,
         Pledge
     ) values (
         p_UserId,
@@ -26,12 +28,13 @@ create procedure if not exists usp_InsertUserPatreonAccount(
         p_TokenExpiry,
         p_Scope,
         p_PatreonId,
+        p_FullName,
         p_Pledge
     );
     
     if row_count() > 0 then
         select up.UserPatreonId, up.UserId, up.RefreshToken, up.AccessToken,
-            up.TokenType, up.TokenExpiry, up.Scope, up.PatreonId, up.Pledge, up.UpdatedOn, up.CreatedOn
+            up.TokenType, up.TokenExpiry, up.Scope, up.PatreonId, up.Pledge, up.FullName, up.UpdatedOn, up.CreatedOn
         from UserPatreon up
         where up.UserId = p_UserId and up.PatreonId = p_PatreonId;
     end if;

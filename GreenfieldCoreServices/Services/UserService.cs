@@ -6,7 +6,7 @@ using GreenfieldCoreServices.Services.Interfaces;
 
 namespace GreenfieldCoreServices.Services;
 
-public class UserService(IUnitOfWork uow, ICacheService<long, User> userCache, ICacheService<long, List<ulong>> discordCache, ICacheService<long, UserPatreonAccount> patreonCache) : IUserService
+public class UserService(IUnitOfWork uow, ICacheService<long, User> userCache, ICacheService<long, List<ulong>> discordCache) : IUserService
 {
     public async Task<Result<User>> CreateUser(Guid minecraftUuid, string username)
     {
@@ -139,106 +139,7 @@ public class UserService(IUnitOfWork uow, ICacheService<long, User> userCache, I
             userCache.SetValue(user.UserId, user);
         return Result<IEnumerable<User>>.Success(mappedUsers);
     }
-
-    public async Task<Result<UserPatreonAccount>> LinkPatreonAccount(long userId, long patreonId, string refreshToken, string accessToken, string tokenType,
-        DateTime tokenExpiry, string scope, decimal? pledge)
-    {
-        var repo = uow.Repository<IUserRepository>();
-        uow.BeginTransaction();
-        if (!(await repo.CreateUserPatreonReference(userId, patreonId, refreshToken, accessToken, tokenType, tokenExpiry, scope, pledge)).TryGetDataNonNull(out var patreonEntity))
-            return Result<UserPatreonAccount>.Failure("Failed to link Patreon account.");
-        uow.CompleteAndCommit();
-        
-        var account = UserPatreonAccount.FromDbModel(patreonEntity);
-        patreonCache.SetValue(account.UserPatreonId, account);
-
-        return Result<UserPatreonAccount>.Success(account);
-    }
-
-    public async Task<Result> UnlinkPatreonAccount(long userId, long patreonId)
-    {
-        var repo = uow.Repository<IUserRepository>();
-        uow.BeginTransaction();
-        var deleteResult = (await repo.DeleteUserPatreonReference(userId, patreonId)).GetOrThrow();
-        if (!deleteResult) return Result.Failure("Patreon account could not be unlinked.");
-        uow.CompleteAndCommit();
-
-        patreonCache.RemoveValues(a => a.PatreonId == patreonId && a.UserId == userId);
-
-        return Result.Success();
-    }
-
-    public async Task<Result<IEnumerable<UserPatreonAccount>>> GetPatreonAccountsByUserId(long userId)
-    {
-        if (patreonCache.TryGetValues(a => a.UserId == userId, out var cachedAccounts))
-            return Result<IEnumerable<UserPatreonAccount>>.Success(cachedAccounts);
-        
-        var repo = uow.Repository<IUserRepository>();
-        var patreonAccountsResult = await repo.GetUserPatreonReferences(userId);
-        if (!patreonAccountsResult.IsSuccessful) return Result<IEnumerable<UserPatreonAccount>>.Failure("Failed to retrieve Patreon accounts.", patreonAccountsResult.StatusCode);
-
-        var patreonAccounts = patreonAccountsResult.GetOrDefault([]);
-        var mappedAccounts = patreonAccounts.Select(UserPatreonAccount.FromDbModel).ToList();
-        
-        foreach (var account in mappedAccounts)
-            patreonCache.SetValue(account.UserPatreonId, account);
-        
-        return Result<IEnumerable<UserPatreonAccount>>.Success(mappedAccounts);
-    }
-
-    public async Task<Result<UserPatreonAccount>> GetPatreonAccountByPatreonId(long userId, long patreonId)
-    {
-        if (patreonCache.TryGetValue(a => a.UserId == userId && a.PatreonId == patreonId, out var cachedAccount))
-            return Result<UserPatreonAccount>.Success(cachedAccount);
-        
-        var repo = uow.Repository<IUserRepository>();
-        
-        var accountResult = await repo.GetUserPatreonAccount(userId, patreonId);
-        if (!accountResult.TryGetDataNonNull(out var patreonAccount))
-            return Result<UserPatreonAccount>.Failure("Patreon account not found.", HttpStatusCode.NotFound);
-        
-        var mappedAccount = UserPatreonAccount.FromDbModel(patreonAccount);
-        patreonCache.SetValue(mappedAccount.UserPatreonId, mappedAccount);
-        return Result<UserPatreonAccount>.Success(mappedAccount);
-    }
-
-    public async Task<Result<UserPatreonAccount>> UpdatePatreonAccountTokens(long userId, long patreonId, string refreshToken, string accessToken, string tokenType,
-        DateTime tokenExpiry, string scope)
-    {
-        var repo = uow.Repository<IUserRepository>();
-        
-        uow.BeginTransaction();
-        var result = await repo.UpdateUserPatreonTokens(userId, patreonId, refreshToken, accessToken, tokenType, tokenExpiry, scope);
-        if (!result.TryGetDataNonNull(out var updatedTokens) || !updatedTokens)
-            return Result<UserPatreonAccount>.Failure("Failed to update Patreon account tokens.");
-        uow.CompleteAndCommit();
-        
-        patreonCache.RemoveValues(a => a.UserId == userId && a.PatreonId == patreonId);
-        
-        var patreonAccountResult = await GetPatreonAccountByPatreonId(userId, patreonId);
-        return !patreonAccountResult.IsSuccessful 
-            ? Result<UserPatreonAccount>.Failure("Failed to retrieve updated Patreon account.", patreonAccountResult.StatusCode)
-            : patreonAccountResult;
-    }
-
-    public async Task<Result<UserPatreonAccount>> UpdatePatreonPledgeAmount(long userId, long patreonId, decimal? pledge)
-    {
-        var repo = uow.Repository<IUserRepository>();
-        
-        uow.BeginTransaction();
-        var result = await repo.UpdateUserPatreonPledge(userId, patreonId, pledge);
-        if (!result.TryGetDataNonNull(out var updatedUser))
-            return Result<UserPatreonAccount>.Failure("Failed to update Patreon pledge amount.");
-        uow.CompleteAndCommit();
-        
-        patreonCache.RemoveValues(a => a.UserId == userId && a.PatreonId == patreonId);
-        
-        var patreonAccountResult = await GetPatreonAccountByPatreonId(userId, patreonId);
-        return !patreonAccountResult.IsSuccessful 
-            ? Result<UserPatreonAccount>.Failure("Failed to retrieve updated Patreon account.", patreonAccountResult.StatusCode)
-            : patreonAccountResult;
-    }
-
+    
     private async Task<Result<IEnumerable<ulong>>> GetLinkedDiscordAccountsInternal(long userId)
     {
         if (discordCache.TryGetValue(userId, out var cachedDiscordIds))

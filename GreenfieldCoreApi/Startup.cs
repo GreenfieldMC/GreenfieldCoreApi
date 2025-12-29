@@ -13,7 +13,10 @@ using GreenfieldCoreServices.Models.Clients;
 using GreenfieldCoreServices.Models.Users;
 using GreenfieldCoreServices.Services;
 using GreenfieldCoreServices.Services.Caching;
+using GreenfieldCoreServices.Services.External;
+using GreenfieldCoreServices.Services.External.Interfaces;
 using GreenfieldCoreServices.Services.Interfaces;
+using GreenfieldCoreServices.Services.Tasks;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Diagnostics;
@@ -53,17 +56,27 @@ public static class Startup
         services.AddTransient<IScriptManager, ScriptManager>();
         services.AddTransient<IClientRepository, ClientRepository>();
         services.AddTransient<IUserRepository, UserRepository>();
+        services.AddTransient<IUserPatreonRepository, UserPatreonRepository>();
         services.AddTransient<IBuildCodeRepository, BuildCodeRepository>();
         services.AddTransient<IBuilderApplicationRepository, BuilderApplicationRepository>();
+    }
+    
+    internal static void ConfigureScheduledTasks(this IServiceCollection services)
+    {
+        services.AddHostedService<PatreonTokenRefreshTask>();
     }
     
     internal static void ConfigureServices(this IServiceCollection services)
     {
         services.AddLogging(builder => builder.AddConsole());
         services.AddTransient<IUserService, UserService>();
+        services.AddTransient<IPatreonService, PatreonService>();
         services.AddTransient<IClientAuthService, ClientAuthService>();
         services.AddTransient<IBuildCodeService, BuildCodeService>();
         services.AddTransient<IBuilderApplicationService, BuilderApplicationService>();
+        services.AddHttpClient<IPatreonApi, PatreonApi>(client => { client.BaseAddress = new Uri("https://www.patreon.com/api/oauth2/"); });
+
+        services.AddSingleton<TaskStartSignalService>();
     }
 
     internal static void ConfigureCaching(this IServiceCollection services)
@@ -72,6 +85,7 @@ public static class Startup
         services.AddSingleton<ICacheService<long, BuildCode>, BuildCodeCacheService>();
         services.AddSingleton<ICacheService<long, User>, UserCacheService>();
         services.AddSingleton<ICacheService<long, List<ulong>>, UserDiscordCacheService>();
+        services.AddSingleton<ICacheService<long, UserPatreonAccount>, UserPatreonCacheService>();
         services.AddSingleton<ICacheService<long, BuilderApplication>, BuildAppCacheService>();
     }
 
@@ -82,6 +96,7 @@ public static class Startup
             .AddJsonFile($"appsettings.{env.EnvironmentName}.json", optional: true)
             .AddJsonFile($"connectionstrings.{env.EnvironmentName}.json", optional: false)
             .AddJsonFile($"jwtsettings.{env.EnvironmentName}.json", optional: false)
+            .AddJsonFile($"services.{env.EnvironmentName}.json", optional: false)
             .AddEnvironmentVariables();
     }
     
