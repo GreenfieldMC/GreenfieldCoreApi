@@ -82,18 +82,28 @@ public class PatreonTokenRefreshTask(TaskStartSignalService startSignal, IServic
 
             var tokenUpdateResult = await patreonService.UpdatePatreonAccountTokens(userPatreonAccount.UserId, userPatreonAccount.PatreonId,
                 tokenResponse.RefreshToken, tokenResponse.AccessToken, tokenResponse.TokenType,
-                DateTime.Now.AddSeconds(tokenResponse.ExpiresIn), tokenResponse.Scope);
+                DateTime.Now.AddSeconds(tokenResponse.ExpiresIn) , tokenResponse.Scope);
             if (!tokenUpdateResult.TryGetDataNonNull(out var patreonData))
             {
                 logger.LogError("Failed to update Patreon tokens in database for user {UserId} PatreonId {PatreonId}. Error: {ErrorMessage}", 
                     userPatreonAccount.UserId, userPatreonAccount.PatreonId, tokenUpdateResult.ErrorMessage);
+                
+                //if we fail to update the tokens in the database, we should remove the account link to prevent further issues
+                _ = patreonService
+                    .UnlinkPatreonAccountReference(userPatreonAccount.UserId, userPatreonAccount.PatreonId)
+                    .ContinueWith(async (task, _) =>
+                    {
+                        var result = await task;
+                        if (!result.IsSuccessful) 
+                            logger.LogError("Failed to unlink Patreon account {PatreonId} for user {UserId} after token update failure. Error: {ErrorMessage}", userPatreonAccount.PatreonId, userPatreonAccount.UserId, result.ErrorMessage);
+                    }, null, cancellationToken);
                 continue;
             }
 
             var identityResponse = await patreonApi.GetPatreonIdentity(tokenResponse.AccessToken);
             if (!identityResponse.TryGetDataNonNull(out var patreonIdentity))
             {
-                logger.LogError("Failed to fetch Patreon identity for user {UserId} PatreonId {PatreonId}. Error: {ErrorMessage}", 
+                logger.LogWarning("Failed to fetch Patreon identity for user {UserId} PatreonId {PatreonId}. Their non-token information will not be updated. Error: {ErrorMessage}", 
                     userPatreonAccount.UserId, userPatreonAccount.PatreonId, identityResponse.ErrorMessage);
                 continue;
             }
@@ -101,14 +111,19 @@ public class PatreonTokenRefreshTask(TaskStartSignalService startSignal, IServic
             var campaignIdResult = await patreonApi.ResolveCampaignId();
             if (!campaignIdResult.TryGetDataNonNull(out var campaignId))
             {
-                logger.LogError("Failed to resolve Patreon campaign ID for user {UserId} PatreonId {PatreonId}. Error: {ErrorMessage}",
-                    userPatreonAccount.UserId, userPatreonAccount.PatreonId, campaignIdResult.ErrorMessage);
+                logger.LogError("Failed to resolve Patreon campaign ID. Their non-token information will not be updated. Error: {ErrorMessage}", campaignIdResult.ErrorMessage);
                 continue;
             }
 
             var fullName = patreonIdentity.Data.Attributes?.FullName ?? "Unknown Patreon User";
             var pledgedAmount = patreonIdentity.GetPledgedAmountOfCampaign(campaignId);
-            _ = patreonService.UpdatePatreonAccountInfo(patreonData.UserId, patreonData.PatreonId, fullName, pledgedAmount);
+            var updateResult = await patreonService.UpdatePatreonAccountInfo(patreonData.UserId, patreonData.PatreonId, fullName, pledgedAmount);
+            if (!updateResult.IsSuccessful)
+            {
+                logger.LogWarning("Failed to update Patreon account info for user {UserId} PatreonId {PatreonId}. Error: {ErrorMessage}", 
+                    userPatreonAccount.UserId, userPatreonAccount.PatreonId, updateResult.ErrorMessage);
+                continue;
+            }
             logger.LogInformation("Successfully refreshed Patreon token for user {UserId} PatreonId {PatreonId}. New pledged amount: {PledgedAmount}",
                 userPatreonAccount.UserId, userPatreonAccount.PatreonId, pledgedAmount);
         }
