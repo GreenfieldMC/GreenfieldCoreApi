@@ -115,4 +115,22 @@ public class PatreonService(IUnitOfWork uow, ICacheService<long, UserPatreonAcco
         
         return Result<IEnumerable<UserPatreonAccount>>.Success(mappedAccounts);
     }
+
+    public async Task<Result<IEnumerable<UserPatreonAccount>>> GetPatreonAccountsByPatreonId(long patreonId)
+    {
+        if (patreonCache.TryGetValues(a => a.PatreonId == patreonId, out var cachedAccounts))
+            return Result<IEnumerable<UserPatreonAccount>>.Success(cachedAccounts);
+        
+        var repo = uow.Repository<IUserPatreonRepository>();
+        var patreonAccountsResult = await repo.SelectUserPatreonAccountByPatreonId(patreonId);
+        if (!patreonAccountsResult.IsSuccessful) return Result<IEnumerable<UserPatreonAccount>>.Failure("Failed to retrieve Patreon accounts.", patreonAccountsResult.StatusCode);
+
+        var patreonAccounts = patreonAccountsResult.GetOrDefault([]);
+        var mappedAccounts = patreonAccounts.Select(UserPatreonAccount.FromDbModel).ToList();
+
+        foreach (var account in mappedAccounts)
+            patreonCache.SetValue(account.UserPatreonId, account);
+
+        return Result<IEnumerable<UserPatreonAccount>>.Success(mappedAccounts);
+    }
 }

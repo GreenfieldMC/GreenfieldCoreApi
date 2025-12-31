@@ -7,7 +7,7 @@ public interface IBuilderApplicationService
 {
 
     //this will submit the application to the database and mark it as 
-    Task<Result<long>> SubmitApplication(ulong discordSnowflake, string minecraftUsername, Guid minecraftUuid, int age,
+    Task<Result<long>> SubmitApplication(long userId, int age,
         string? nationality, List<string> houseBuildLinks, List<string> otherBuildLinks,
         string? additionalBuildingInformation, string whyJoinGreenfield, string? additionalComments);
 

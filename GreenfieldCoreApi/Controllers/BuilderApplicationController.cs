@@ -22,9 +22,7 @@ public class BuilderApplicationController(IBuilderApplicationService buildAppSer
     [Produces(typeof(long))]
     public async Task<IActionResult> SubmitApplication([FromBody] BuilderApplicationSubmitModel application)
     {
-        var appIdResult = await buildAppService.SubmitApplication(application.DiscordId,
-            application.MinecraftUsername,
-            application.MinecraftUuid,
+        var appIdResult = await buildAppService.SubmitApplication(application.UserId,
             application.Age,
             application.Nationality,
             application.HouseBuildLinks,

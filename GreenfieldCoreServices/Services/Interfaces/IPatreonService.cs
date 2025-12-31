@@ -76,4 +76,11 @@ public interface IPatreonService
     /// <returns>A list of linked UserPatreonAccount objects</returns>
     public Task<Result<IEnumerable<UserPatreonAccount>>> GetPatreonAccountsByUserId(long userId);
     
+    /// <summary>
+    /// Gets all linked Patreon accounts by Patreon ID.
+    /// </summary>
+    /// <param name="patreonId">The Patreon ID</param>
+    /// <returns>>A list of linked UserPatreonAccount objects with the same PatreonId</returns>
+    public Task<Result<IEnumerable<UserPatreonAccount>>> GetPatreonAccountsByPatreonId(long patreonId);
+    
 }

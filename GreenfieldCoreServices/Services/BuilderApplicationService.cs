@@ -3,18 +3,14 @@ using GreenfieldCoreDataAccess.Database.Models;
 using GreenfieldCoreDataAccess.Database.Repositories.Interfaces;
 using GreenfieldCoreDataAccess.Database.UnitOfWork;
 using GreenfieldCoreServices.Models.BuildApps;
-using GreenfieldCoreServices.Models.Users;
 using GreenfieldCoreServices.Services.Interfaces;
 using Microsoft.Extensions.Logging;
 
 namespace GreenfieldCoreServices.Services;
 
-public class BuilderApplicationService(IUnitOfWork uow, IUserService userService, ILogger<BuilderApplicationService> logger, ICacheService<long, BuilderApplication> buildAppCache) : IBuilderApplicationService
+public class BuilderApplicationService(IUnitOfWork uow, ILogger<BuilderApplicationService> logger, ICacheService<long, BuilderApplication> buildAppCache) : IBuilderApplicationService
 {
-    public async Task<Result<long>> SubmitApplication(
-        ulong discordSnowflake,
-        string minecraftUsername,
-        Guid minecraftUuid,
+    public async Task<Result<long>> SubmitApplication(long userId,
         int age,
         string? nationality,
         List<string> houseBuildLinks,
@@ -24,22 +20,12 @@ public class BuilderApplicationService(IUnitOfWork uow, IUserService userService
         string? additionalComments)
     {
         var builderRepo = uow.Repository<IBuilderApplicationRepository>();
-
-        var userResult = await EnsureUser(minecraftUuid, minecraftUsername);
-        if (!userResult.IsSuccessful)
-            return Result<long>.Failure(userResult.ErrorMessage ?? "Failed to resolve user.", userResult.StatusCode);
-
-        var user = userResult.GetNonNullOrThrow();
-
-        var discordLinkResult = await EnsureDiscordLink(user.UserId, discordSnowflake);
-        if (!discordLinkResult.IsSuccessful)
-            return Result<long>.Failure(discordLinkResult.ErrorMessage ?? "Failed to link Discord account.", discordLinkResult.StatusCode);
-
+        
         uow.BeginTransaction();
         try
         {
             var applicationInsertResult = await builderRepo.InsertApplication(
-                user.UserId,
+                userId,
                 age,
                 nationality ?? string.Empty,
                 additionalBuildingInformation,
@@ -75,14 +61,14 @@ public class BuilderApplicationService(IUnitOfWork uow, IUserService userService
             
             uow.CompleteAndCommit();
             
-            var mapped = MapApplicationEntityToModel(user, application, [], linkedImages);
+            var mapped = MapApplicationEntityToModel(userId, application, [], linkedImages);
             buildAppCache.SetValue(applicationId, mapped);
             
             return Result<long>.Success(applicationId);
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Unexpected failure while submitting builder application for Minecraft UUID {MinecraftUuid}.", minecraftUuid);
+            logger.LogError(ex, "Unexpected failure while submitting builder application for user {UserId}.", userId);
             return Result<long>.Failure("An unexpected error occurred while submitting the application.", HttpStatusCode.InternalServerError);
         }
     }
@@ -180,20 +166,15 @@ public class BuilderApplicationService(IUnitOfWork uow, IUserService userService
         if (!imagesResult.IsSuccessful)
             return Result<BuilderApplication>.Failure(imagesResult.ErrorMessage ?? "Failed to retrieve application images.", imagesResult.StatusCode);
         
-        var userResult = await userService.GetUserByUserId(applicationEntity.UserId);
-        if (!userResult.IsSuccessful)
-            return Result<BuilderApplication>.Failure(userResult.ErrorMessage ?? "Failed to retrieve application user.", userResult.StatusCode);
-        
         var images = imagesResult.GetNonNullOrThrow().ToList();
         var statuses = statusesResult.GetNonNullOrThrow().ToList();
-        var user = userResult.GetNonNullOrThrow();
         
-        var applicationModel = MapApplicationEntityToModel(user, applicationEntity, statuses, images);
+        var applicationModel = MapApplicationEntityToModel(applicationEntity.UserId, applicationEntity, statuses, images);
         buildAppCache.SetValue(applicationId, applicationModel);
         return Result<BuilderApplication>.Success(applicationModel);
     }
 
-    private BuilderApplication MapApplicationEntityToModel(User user, 
+    private BuilderApplication MapApplicationEntityToModel(long userId, 
         BuilderApplicationEntity entity,
         List<BuilderAppStatusEntity> statuses,
         List<BuilderAppImageLinkEntity> images)
@@ -201,7 +182,7 @@ public class BuilderApplicationService(IUnitOfWork uow, IUserService userService
         return new BuilderApplication
         {
             ApplicationId = entity.ApplicationId,
-            User = user,
+            UserId = userId,
             Age = entity.UserAge,
             Nationality = entity.UserNationality,
             AdditionalBuildingInformation = entity.AdditionalBuildingInformation,
@@ -220,27 +201,5 @@ public class BuilderApplicationService(IUnitOfWork uow, IUserService userService
                 .Select(img => new BuildAppImage(img.ImageLink, img.LinkType, img.CreatedOn))
                 .ToList()
         };
-    }
-
-    private async Task<Result<User>> EnsureUser(Guid minecraftUuid, string minecraftUsername)
-    {
-        var userResult = await userService.GetUserByUuid(minecraftUuid);
-        if (userResult.IsSuccessful || userResult.StatusCode != HttpStatusCode.NotFound)
-            return userResult;
-
-        return await userService.CreateUser(minecraftUuid, minecraftUsername);
-    }
-
-    private async Task<Result<bool>> EnsureDiscordLink(long userId, ulong discordSnowflake)
-    {
-        var existingLinksResult = await userService.GetLinkedDiscordAccounts(userId);
-        if (!existingLinksResult.IsSuccessful)
-            return Result<bool>.Failure(existingLinksResult.ErrorMessage ?? "Failed to retrieve linked Discord accounts.", existingLinksResult.StatusCode);
-
-        var existingLinks = existingLinksResult.GetNonNullOrThrow();
-        if (existingLinks.Contains(discordSnowflake))
-            return Result<bool>.Success(true);
-
-        return await userService.LinkDiscordAccount(userId, discordSnowflake);
     }
 }

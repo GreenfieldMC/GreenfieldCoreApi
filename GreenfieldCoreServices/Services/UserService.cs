@@ -69,25 +69,7 @@ public class UserService(IUnitOfWork uow, ICacheService<long, User> userCache, I
 
     public async Task<Result<bool>> LinkDiscordAccount(long userId, ulong discordSnowflake)
     {
-        var existingUserResult = await GetUserByUserId(userId);
-        if (!existingUserResult.IsSuccessful) return Result<bool>.Failure("User not found.", HttpStatusCode.NotFound);
-
-        var linkedAccountsResult = await GetLinkedDiscordAccounts(userId);
-        if (!linkedAccountsResult.IsSuccessful)
-            return Result<bool>.Failure("Could not retrieve linked Discord accounts.", linkedAccountsResult.StatusCode);
-        
-        var linkedAccounts = linkedAccountsResult.GetNonNullOrThrow().ToList();
-        if (linkedAccounts.Contains(discordSnowflake))
-            return Result<bool>.Failure("Discord account is already linked to this user.", HttpStatusCode.Conflict);
-        
-        var repo = uow.Repository<IUserRepository>();
-        
-        uow.BeginTransaction();
-        var createdLink = (await repo.CreateUserDiscordReference(userId, discordSnowflake)).GetOrThrow();
-        uow.CompleteAndCommit();
-        
-        discordCache.SetValue(userId, linkedAccounts.Append(discordSnowflake).ToList());
-        return createdLink is null ? Result<bool>.Failure("Discord account could not be linked.") : Result<bool>.Success(true);
+        return Result<bool>.Failure("Discord accounts must be linked via the OAuth flow. Use the Discord connection link endpoint.", HttpStatusCode.BadRequest);
     }
 
     public async Task<Result<bool>> UnlinkDiscordAccount(long userId, ulong discordSnowflake)

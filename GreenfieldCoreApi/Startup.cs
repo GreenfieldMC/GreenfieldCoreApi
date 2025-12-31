@@ -10,6 +10,8 @@ using GreenfieldCoreServices.Commands;
 using GreenfieldCoreServices.Models.BuildApps;
 using GreenfieldCoreServices.Models.BuildCodes;
 using GreenfieldCoreServices.Models.Clients;
+using GreenfieldCoreServices.Models.Discord;
+using GreenfieldCoreServices.Models.Patreon;
 using GreenfieldCoreServices.Models.Users;
 using GreenfieldCoreServices.Services;
 using GreenfieldCoreServices.Services.Caching;
@@ -57,6 +59,7 @@ public static class Startup
         services.AddTransient<IClientRepository, ClientRepository>();
         services.AddTransient<IUserRepository, UserRepository>();
         services.AddTransient<IUserPatreonRepository, UserPatreonRepository>();
+        services.AddTransient<IUserDiscordRepository, UserDiscordRepository>();
         services.AddTransient<IBuildCodeRepository, BuildCodeRepository>();
         services.AddTransient<IBuilderApplicationRepository, BuilderApplicationRepository>();
     }
@@ -64,6 +67,7 @@ public static class Startup
     internal static void ConfigureScheduledTasks(this IServiceCollection services)
     {
         services.AddHostedService<PatreonTokenRefreshTask>();
+        services.AddHostedService<DiscordTokenRefreshTask>();
     }
     
     internal static void ConfigureServices(this IServiceCollection services)
@@ -71,10 +75,12 @@ public static class Startup
         services.AddLogging(builder => builder.AddConsole());
         services.AddTransient<IUserService, UserService>();
         services.AddTransient<IPatreonService, PatreonService>();
+        services.AddTransient<IDiscordService, DiscordService>();
         services.AddTransient<IClientAuthService, ClientAuthService>();
         services.AddTransient<IBuildCodeService, BuildCodeService>();
         services.AddTransient<IBuilderApplicationService, BuilderApplicationService>();
         services.AddHttpClient<IPatreonApi, PatreonApi>(client => { client.BaseAddress = new Uri("https://www.patreon.com/api/oauth2/"); });
+        services.AddHttpClient<IDiscordApi, DiscordApi>(client => { client.BaseAddress = new Uri("https://discord.com"); });
 
         services.AddSingleton<TaskStartSignalService>();
     }
@@ -86,7 +92,10 @@ public static class Startup
         services.AddSingleton<ICacheService<long, User>, UserCacheService>();
         services.AddSingleton<ICacheService<long, List<ulong>>, UserDiscordCacheService>();
         services.AddSingleton<ICacheService<long, UserPatreonAccount>, UserPatreonCacheService>();
+        services.AddSingleton<ICacheService<long, UserDiscordAccount>, UserDiscordAccountCacheService>();
         services.AddSingleton<ICacheService<long, BuilderApplication>, BuildAppCacheService>();
+        services.AddSingleton<ICacheService<long, PatreonConnectionState>, PatreonConnectionStateCache>();
+        services.AddSingleton<ICacheService<long, DiscordConnectionState>, DiscordConnectionStateCache>();
     }
 
     internal static void ConfigureConfiguration(this IConfigurationBuilder configBuilder, IWebHostEnvironment env)

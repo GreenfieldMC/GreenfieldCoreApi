@@ -6,5 +6,10 @@
     "CreatorAccessToken": "your-creator-access-token",
     "CreatorRefreshToken": "your-creator-refresh-token",
     "CampaignUrl": "link-to-your-patreon-campaign"
+  },
+  "Discord": {
+    "ClientId": "your-discord-client-id",
+    "ClientSecret": "your-discord-client-secret",
+    "RedirectUri": "your-discord-redirect-uri"
   }
 }

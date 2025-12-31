@@ -11,7 +11,7 @@ namespace GreenfieldCoreApi.Controllers;
 [ApiVersion("1.0")]
 [Route("api/v{version:apiVersion}/[controller]")]
 [Produces("application/json")]
-public class UserController(IUserService userService, IPatreonService patreonService) : ControllerBase
+public class UserController(IUserService userService, IPatreonService patreonService, IDiscordService discordService) : ControllerBase
 {
     
     [HttpGet("{minecraftUuid:guid}/userinfo")]
@@ -68,81 +68,49 @@ public class UserController(IUserService userService, IPatreonService patreonSer
         var created = createdUserResult.GetNonNullOrThrow();
         return CreatedAtAction(nameof(GetUserByUuid), new { version = HttpContext.GetRequestedApiVersion()?.ToString(), minecraftUuid = created.MinecraftUuid }, created);
     }
-    
-    [HttpGet("{userId:long}/discord")]
-    [Authorize(Roles = "Users.Read")]
-    [ProducesResponseType(StatusCodes.Status200OK)]
-    [ProducesResponseType(StatusCodes.Status404NotFound)]
-    [Produces(typeof(IEnumerable<ulong>))]
-    public async Task<IActionResult> GetLinkedDiscordAccountsByUserId([FromRoute] long userId)
-    {
-        var linkedResult = await userService.GetLinkedDiscordAccounts(userId);
-        return linkedResult.IsSuccessful
-            ? Ok(linkedResult.GetNonNullOrThrow())
-            : Problem(statusCode: linkedResult.GetStatusCodeInt(), detail: linkedResult.ErrorMessage);
-    }
 
-    [HttpGet("{minecraftUuid:guid}/discord")]
-    [Authorize(Roles = "Users.Read")]
-    [ProducesResponseType(StatusCodes.Status200OK)]
-    [ProducesResponseType(StatusCodes.Status404NotFound)]
-    [Produces(typeof(IEnumerable<ulong>))]
-    public async Task<IActionResult> GetLinkedDiscordAccountsByUuid([FromRoute] Guid minecraftUuid)
-    {
-        var linkedResult = await userService.GetLinkedDiscordAccountsByUuid(minecraftUuid);
-        return linkedResult.IsSuccessful
-            ? Ok(linkedResult.GetNonNullOrThrow())
-            : Problem(statusCode: linkedResult.GetStatusCodeInt(), detail: linkedResult.ErrorMessage);
-    }
-
-    [HttpGet("discord/{discordSnowflake:long}/users")]
-    [Authorize(Roles = "Users.Read")]
-    [ProducesResponseType(StatusCodes.Status200OK)]
-    [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    [Produces(typeof(IEnumerable<GreenfieldCoreServices.Models.Users.User>))]
-    public async Task<IActionResult> GetUsersByDiscordSnowflake([FromRoute] long discordSnowflake)
-    {
-        if (discordSnowflake <= 0)
-            return Problem(statusCode: StatusCodes.Status400BadRequest, detail: "A valid discordSnowflake must be provided.");
-        var usersResult = await userService.GetUsersByDiscordSnowflake((ulong)discordSnowflake);
-        return usersResult.IsSuccessful
-            ? Ok(usersResult.GetOrDefault([]))
-            : Problem(statusCode: usersResult.GetStatusCodeInt(), detail: usersResult.ErrorMessage);
-    }
-
-    [HttpPut("{userId:long}/discord/{discordSnowflake:long}")]
-    [Authorize(Roles = "Users.Write")]
-    [ProducesResponseType(StatusCodes.Status201Created)]
-    [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(StatusCodes.Status404NotFound)]
-    [ProducesResponseType(StatusCodes.Status409Conflict)]
-    public async Task<IActionResult> LinkDiscordAccount([FromRoute] long userId, [FromRoute] long discordSnowflake)
-    {
-        if (discordSnowflake <= 0)
-            return Problem(statusCode: StatusCodes.Status400BadRequest, detail: "A valid discordSnowflake must be provided.");
-        var linkResult = await userService.LinkDiscordAccount(userId, (ulong)discordSnowflake);
-        return !linkResult.IsSuccessful 
-            ? Problem(statusCode: linkResult.GetStatusCodeInt(), detail: linkResult.ErrorMessage) 
-            : CreatedAtAction(nameof(GetLinkedDiscordAccountsByUserId), new { version = HttpContext.GetRequestedApiVersion()?.ToString(), userId }, true);
-    }
-
-    [HttpDelete("{userId:long}/discord/{discordSnowflake:long}")]
-    [Authorize(Roles = "Users.Write")]
+    [HttpDelete("{userId:long}/accounts/discord/{discordSnowflake}")]
+    [Authorize(Roles = "Users.Write.Discord")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> UnlinkDiscordAccount([FromRoute] long userId, [FromRoute] long discordSnowflake)
+    public async Task<IActionResult> UnlinkDiscordAccount([FromRoute] long userId, [FromRoute] ulong discordSnowflake)
     {
-        if (discordSnowflake <= 0)
-            return Problem(statusCode: StatusCodes.Status400BadRequest, detail: "A valid discordSnowflake must be provided.");
-        var unlinkResult = await userService.UnlinkDiscordAccount(userId, (ulong)discordSnowflake);
+        var unlinkResult = await discordService.UnlinkDiscordAccountReference(userId, discordSnowflake);
         return unlinkResult.IsSuccessful
-            ? Ok(true)
+            ? Ok()
             : Problem(statusCode: unlinkResult.GetStatusCodeInt(), detail: unlinkResult.ErrorMessage);
     }
+    
+    [HttpGet("{userId:long}/accounts/discord")]
+    [Authorize(Roles = "Users.Read")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [Produces(typeof(IEnumerable<ulong>))]
+    public async Task<IActionResult> GetDiscordAccountsByUserId([FromRoute] long userId)
+    {
+        var userResult = await userService.GetUserByUserId(userId);
+        if (!userResult.TryGetDataNonNull(out var user))
+            return Problem(statusCode: userResult.GetStatusCodeInt(), detail: userResult.ErrorMessage);
+        
+        var discordAccountsResult = await discordService.GetDiscordAccountsByUserId(userId);
+        if (!discordAccountsResult.TryGetDataNonNull(out var discordAccounts))
+            return Problem(statusCode: discordAccountsResult.GetStatusCodeInt(), detail: discordAccountsResult.ErrorMessage);
+        
+        var apiModel = discordAccounts.Select(model => new ApiUserDiscordAccount(
+            model.UserDiscordId,
+            user,
+            model.DiscordSnowflake,
+            model.DiscordUsername,
+            model.UpdatedOn,
+            model.CreatedOn
+        ));
 
-    [HttpDelete("{userId:long}/patreon/{patreonId:long}")]
-    [Authorize(Roles = "Users.Write")]
+        return Ok(apiModel);
+    }
+
+    [HttpDelete("{userId:long}/accounts/patreon/{patreonId:long}")]
+    [Authorize(Roles = "Users.Write.Patreon")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -154,8 +122,8 @@ public class UserController(IUserService userService, IPatreonService patreonSer
             : Problem(statusCode: unlinkResult.GetStatusCodeInt(), detail: unlinkResult.ErrorMessage);
     }
 
-    [HttpGet("{userId:long}/patreon")]
-    [Authorize(Roles = "Users.Read")]
+    [HttpGet("{userId:long}/accounts/patreon")]
+    [Authorize(Roles = "Users.Read.Patreon")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [Produces(typeof(IEnumerable<ApiUserPatreonAccount>))]

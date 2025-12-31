@@ -28,9 +28,8 @@ public interface IPatreonApi
     /// </summary>
     /// <param name="userId"></param>
     /// <param name="code"></param>
-    /// <param name="state"></param>
     /// <returns></returns>
-    Task<Result<UserPatreonAccount>> LinkPatreonAccountToUser(long userId, string code, string state);
+    Task<Result<UserPatreonAccount>> LinkPatreonAccountToUser(long userId, string code);
 
     /// <summary>
     /// Attempts to resolve the Patreon campaign ID associated with the configured Patreon integration.

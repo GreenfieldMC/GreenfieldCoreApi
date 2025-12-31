@@ -17,6 +17,7 @@ public class UserPatreonRepository(IUnitOfWork uow) : BaseRepository(uow), IUser
     private const string UpdateUserPatreonPledgeProc = "usp_UpdateUserPatreonPledge";
     private const string SelectUserPatreonAccountProc = "usp_SelectUserPatreonAccount";
     private const string SelectAllPatreonAccountsProc = "usp_SelectAllPatreonAccounts";
+    private const string SelectPatreonAccountsByPatreonIdProc = "usp_SelectPatreonAccountsByPatreonId";
     
     public async Task<Result<UserPatreonEntity>> InsertUserPatreonReference(long userId, long patreonId, string refreshToken, string accessToken, string tokenType,
         DateTime tokenExpiry, string scope, string fullName, decimal? pledge)
@@ -124,6 +125,21 @@ public class UserPatreonRepository(IUnitOfWork uow) : BaseRepository(uow), IUser
             return Result<IEnumerable<UserPatreonEntity>>.Success(result);
         } catch (DbException ex) {
             return Result<IEnumerable<UserPatreonEntity>>.Failure($"Failed to get all patreon accounts: {ex.Message}");
+        }
+    }
+
+    public async Task<Result<IEnumerable<UserPatreonEntity>>> SelectUserPatreonAccountByPatreonId(long patreonId)
+    {
+        var parameters = new DynamicParameters();
+        parameters.Add("p_PatreonId", patreonId, DbType.Int64);
+        try 
+        {
+            var result = await Connection.QueryAsync<UserPatreonEntity>(SelectPatreonAccountsByPatreonIdProc, parameters, commandType: CommandType.StoredProcedure, transaction: Transaction);
+            return Result<IEnumerable<UserPatreonEntity>>.Success(result);
+        } 
+        catch (DbException ex) 
+        {
+            return Result<IEnumerable<UserPatreonEntity>>.Failure($"Failed to get user patreon account by patreon id: {ex.Message}");
         }
     }
 }

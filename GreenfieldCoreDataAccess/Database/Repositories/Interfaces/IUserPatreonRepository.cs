@@ -74,4 +74,11 @@ public interface IUserPatreonRepository
     /// </summary>
     /// <returns></returns>
     Task<Result<IEnumerable<UserPatreonEntity>>> SelectAllPatreonAccounts();
+
+    /// <summary>
+    /// Get a user's Patreon account by their Patreon ID.
+    /// </summary>
+    /// <param name="patreonId">The Patreon ID</param>
+    /// <returns></returns>
+    Task<Result<IEnumerable<UserPatreonEntity>>> SelectUserPatreonAccountByPatreonId(long patreonId);
 }

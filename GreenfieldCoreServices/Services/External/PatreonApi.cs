@@ -82,7 +82,7 @@ public class PatreonApi(IConfiguration configuration, HttpClient client, IPatreo
             : Result<PatreonOAuthTokenResponse>.Success(model);
     }
 
-    public async Task<Result<UserPatreonAccount>> LinkPatreonAccountToUser(long userId, string code, string state)
+    public async Task<Result<UserPatreonAccount>> LinkPatreonAccountToUser(long userId, string code)
     {
         var campaignIdTask = ResolveCampaignId();
         
