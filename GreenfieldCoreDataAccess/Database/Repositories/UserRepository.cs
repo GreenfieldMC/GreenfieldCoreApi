@@ -14,10 +14,6 @@ public class UserRepository(IUnitOfWork uow) : BaseRepository(uow), IUserReposit
     private const string SelectUserByUuidProc = "usp_SelectUserByUuid";
     private const string UpdateUsernameProc = "usp_UpdateUsername";
     
-    private const string SelectUserDiscordAccountsProc = "usp_SelectUserDiscordAccounts";
-    private const string DeleteUserDiscordAccountProc = "usp_DeleteUserDiscordAccount";
-    private const string SelectUsersByDiscordSnowflakeProc = "usp_SelectUsersByDiscordSnowflake";
-    
     public async Task<Result<UserEntity?>> GetUserByUserId(long userId)
     {
         var parameters = new DynamicParameters();
@@ -69,47 +65,6 @@ public class UserRepository(IUnitOfWork uow) : BaseRepository(uow), IUserReposit
             return Result<bool>.Success(rows > 0);
         } catch (DbException ex) {
             return Result<bool>.Failure($"Failed to update username: {ex.Message}");
-        }
-    }
-
-
-    public async Task<Result<IEnumerable<UserDiscordEntity>>> GetUserDiscordReferences(long userId)
-    {
-        var parameters = new DynamicParameters();
-        parameters.Add("p_UserId", userId, DbType.Int64);
-        try {
-            var result = await Connection.QueryAsync<UserDiscordEntity>(SelectUserDiscordAccountsProc, parameters, commandType: CommandType.StoredProcedure, transaction: Transaction);
-            return Result<IEnumerable<UserDiscordEntity>>.Success(result);
-        } catch (DbException ex) {
-            return Result<IEnumerable<UserDiscordEntity>>.Failure($"Failed to get user discord references: {ex.Message}");
-        }
-    }
-
-    public async Task<Result<bool>> DeleteUserDiscordReference(long userId, ulong discordSnowflake)
-    {
-        var parameters = new DynamicParameters();
-        parameters.Add("p_UserId", userId, DbType.Int64);
-        parameters.Add("p_DiscordSnowflake", discordSnowflake, DbType.UInt64);
-
-        try
-        {
-            var affected = await Connection.ExecuteAsync(DeleteUserDiscordAccountProc, parameters, commandType: CommandType.StoredProcedure, transaction: Transaction);
-            return Result<bool>.Success(affected > 0);
-        } catch (DbException ex)
-        {
-            return Result<bool>.Failure($"Failed to delete user discord reference: {ex.Message}");
-        }
-    }
-
-    public async Task<Result<IEnumerable<UserEntity>>> GetUsersByDiscordSnowflake(ulong discordSnowflake)
-    {
-        var parameters = new DynamicParameters();
-        parameters.Add("p_DiscordSnowflake", discordSnowflake, DbType.UInt64);
-        try {
-            var users = await Connection.QueryAsync<UserEntity>(SelectUsersByDiscordSnowflakeProc, parameters, commandType: CommandType.StoredProcedure, transaction: Transaction);
-            return Result<IEnumerable<UserEntity>>.Success(users);
-        } catch (DbException ex) {
-            return Result<IEnumerable<UserEntity>>.Failure($"Failed to get users by Discord snowflake: {ex.Message}");
         }
     }
 }

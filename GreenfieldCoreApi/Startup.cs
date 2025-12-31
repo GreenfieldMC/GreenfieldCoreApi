@@ -90,9 +90,8 @@ public static class Startup
         services.AddSingleton<ICacheService<Guid, Client>, ClientCacheService>();
         services.AddSingleton<ICacheService<long, BuildCode>, BuildCodeCacheService>();
         services.AddSingleton<ICacheService<long, User>, UserCacheService>();
-        services.AddSingleton<ICacheService<long, List<ulong>>, UserDiscordCacheService>();
         services.AddSingleton<ICacheService<long, UserPatreonAccount>, UserPatreonCacheService>();
-        services.AddSingleton<ICacheService<long, UserDiscordAccount>, UserDiscordAccountCacheService>();
+        services.AddSingleton<ICacheService<long, UserDiscordAccount>, UserDiscordCacheService>();
         services.AddSingleton<ICacheService<long, BuilderApplication>, BuildAppCacheService>();
         services.AddSingleton<ICacheService<long, PatreonConnectionState>, PatreonConnectionStateCache>();
         services.AddSingleton<ICacheService<long, DiscordConnectionState>, DiscordConnectionStateCache>();

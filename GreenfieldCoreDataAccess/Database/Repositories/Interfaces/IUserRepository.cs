@@ -35,27 +35,4 @@ public interface IUserRepository
     /// <returns>Result true if an update occurred, false otherwise.</returns>
     Task<Result<bool>> UpdateUsername(Guid minecraftUuid, string newMinecraftUsername);
 
-
-    /// <summary>
-    /// Get all Discord references for a given user by their Minecraft UUID.
-    /// </summary>
-    /// <param name="userId"></param>
-    /// <returns></returns>
-    Task<Result<IEnumerable<UserDiscordEntity>>> GetUserDiscordReferences(long userId);
-
-    /// <summary>
-    /// Delete a reference between a user and their Discord account.
-    /// </summary>
-    /// <param name="userId"></param>
-    /// <param name="discordSnowflake">The Discord snowflake ID</param>
-    /// <returns></returns>
-    Task<Result<bool>> DeleteUserDiscordReference(long userId, ulong discordSnowflake);
-    
-    /// <summary>
-    /// Get all users linked to a Discord snowflake.
-    /// </summary>
-    /// <param name="discordSnowflake">The Discord snowflake ID.</param>
-    /// <returns>Result containing the linked user entities (empty when none found).</returns>
-    Task<Result<IEnumerable<UserEntity>>> GetUsersByDiscordSnowflake(ulong discordSnowflake);
-
 }

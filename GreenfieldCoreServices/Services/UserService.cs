@@ -6,7 +6,7 @@ using GreenfieldCoreServices.Services.Interfaces;
 
 namespace GreenfieldCoreServices.Services;
 
-public class UserService(IUnitOfWork uow, ICacheService<long, User> userCache, ICacheService<long, List<ulong>> discordCache) : IUserService
+public class UserService(IUnitOfWork uow, ICacheService<long, User> userCache) : IUserService
 {
     public async Task<Result<User>> CreateUser(Guid minecraftUuid, string username)
     {
@@ -65,73 +65,6 @@ public class UserService(IUnitOfWork uow, ICacheService<long, User> userCache, I
         existingUser.Username = newUsername;
         userCache.SetValue(existingUser.UserId, existingUser);
         return Result<User>.Success(existingUser);
-    }
-
-    public async Task<Result<bool>> LinkDiscordAccount(long userId, ulong discordSnowflake)
-    {
-        return Result<bool>.Failure("Discord accounts must be linked via the OAuth flow. Use the Discord connection link endpoint.", HttpStatusCode.BadRequest);
-    }
-
-    public async Task<Result<bool>> UnlinkDiscordAccount(long userId, ulong discordSnowflake)
-    {
-        var linkedAccountsResult = await GetLinkedDiscordAccounts(userId);
-        if (!linkedAccountsResult.IsSuccessful)
-            return Result<bool>.Failure("Could not retrieve linked Discord accounts.", linkedAccountsResult.StatusCode);
-        
-        var linkedAccounts = linkedAccountsResult.GetNonNullOrThrow().ToList();
-        if (!linkedAccounts.Contains(discordSnowflake))
-            return Result<bool>.Failure("Discord account is not linked to this user.", HttpStatusCode.NotFound);
-        
-        var repo = uow.Repository<IUserRepository>();
-        uow.BeginTransaction();
-        var deleteResult = (await repo.DeleteUserDiscordReference(userId, discordSnowflake)).GetOrThrow();
-        if (!deleteResult) return Result<bool>.Failure("Discord account could not be unlinked.");
-        uow.CompleteAndCommit();
-        discordCache.SetValue(userId, linkedAccounts.Where(id => id != discordSnowflake).ToList());
-        return Result<bool>.Success(true);
-    }
-
-    public async Task<Result<IEnumerable<ulong>>> GetLinkedDiscordAccounts(long userId)
-    {
-        var userResult = await GetUserByUserId(userId);
-        if (!userResult.IsSuccessful) return Result<IEnumerable<ulong>>.Failure("User not found.", userResult.StatusCode);
-        var user = userResult.GetNonNullOrThrow();
-        return await GetLinkedDiscordAccountsInternal(user.UserId);
-    }
-
-    public async Task<Result<IEnumerable<ulong>>> GetLinkedDiscordAccountsByUuid(Guid minecraftUuid)
-    {
-        var userResult = await GetUserByUuid(minecraftUuid);
-        if (!userResult.IsSuccessful) return Result<IEnumerable<ulong>>.Failure("User not found.", userResult.StatusCode);
-        var user = userResult.GetNonNullOrThrow();
-        return await GetLinkedDiscordAccountsInternal(user.UserId);
-    }
-
-    public async Task<Result<IEnumerable<User>>> GetUsersByDiscordSnowflake(ulong discordSnowflake)
-    {
-        if (discordSnowflake == 0)
-            return Result<IEnumerable<User>>.Failure("A valid discordSnowflake must be provided.");
-        var repo = uow.Repository<IUserRepository>();
-        var usersResult = await repo.GetUsersByDiscordSnowflake(discordSnowflake);
-        if (!usersResult.IsSuccessful)
-            return Result<IEnumerable<User>>.Failure(usersResult.ErrorMessage ?? "Failed to get users by Discord snowflake.", usersResult.StatusCode);
-        var entities = usersResult.GetOrDefault([]);
-        var mappedUsers = entities.Select(User.FromDbModel).ToList();
-        foreach (var user in mappedUsers)
-            userCache.SetValue(user.UserId, user);
-        return Result<IEnumerable<User>>.Success(mappedUsers);
-    }
-    
-    private async Task<Result<IEnumerable<ulong>>> GetLinkedDiscordAccountsInternal(long userId)
-    {
-        if (discordCache.TryGetValue(userId, out var cachedDiscordIds))
-            return Result<IEnumerable<ulong>>.Success(cachedDiscordIds);
-        
-        var repo = uow.Repository<IUserRepository>();
-        var linkedEntities = (await repo.GetUserDiscordReferences(userId)).GetNonNullOrThrow();
-        var discordIds = linkedEntities.Select(e => e.DiscordSnowflake).ToList();
-        discordCache.SetValue(userId, discordIds);
-        return Result<IEnumerable<ulong>>.Success(discordIds);
     }
     
     private bool IsValidUsername(string username)
