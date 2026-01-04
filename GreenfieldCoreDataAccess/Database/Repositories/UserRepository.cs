@@ -1,7 +1,6 @@
-using System.Data;
 using System.Data.Common;
-using Dapper;
 using GreenfieldCoreDataAccess.Database.Models;
+using GreenfieldCoreDataAccess.Database.Procedures;
 using GreenfieldCoreDataAccess.Database.Repositories.Interfaces;
 using GreenfieldCoreDataAccess.Database.UnitOfWork;
 
@@ -9,62 +8,45 @@ namespace GreenfieldCoreDataAccess.Database.Repositories;
 
 public class UserRepository(IUnitOfWork uow) : BaseRepository(uow), IUserRepository
 {
-    private const string InsertUserProc = "usp_InsertUser";
-    private const string SelectUserByUserIdProc = "usp_SelectUserByUserId";
-    private const string SelectUserByUuidProc = "usp_SelectUserByUuid";
-    private const string UpdateUsernameProc = "usp_UpdateUsername";
     
-    public async Task<Result<UserEntity?>> GetUserByUserId(long userId)
+    public async Task<Result<UserEntity>> SelectUserByUserId(long userId)
     {
-        var parameters = new DynamicParameters();
-        parameters.Add("p_UserId", userId, DbType.Int64);
         try {
-            var result = await Connection.QuerySingleOrDefaultAsync<UserEntity?>(SelectUserByUserIdProc, parameters, commandType: CommandType.StoredProcedure, transaction: Transaction);
-            return Result<UserEntity?>.Success(result);
+            var result = await Connection.QuerySingleProcedure(StoredProcs.Users.SelectUserByUserId, userId, Transaction);
+            return Result<UserEntity>.Success(result);
         } catch (DbException ex) {
-            return Result<UserEntity?>.Failure($"Failed to get user by ID: {ex.Message}");
+            return Result<UserEntity>.Failure($"Failed to get user by ID: {ex.Message}");
         }
     }
 
-    public async Task<Result<UserEntity?>> GetUserByUuid(Guid minecraftUuid)
+    public async Task<Result<UserEntity>> SelectUserByUuid(Guid minecraftUuid)
     {
-        var parameters = new DynamicParameters();
-        parameters.Add("u_MinecraftUuid", minecraftUuid, DbType.Guid);
-        try {
-            var result = await Connection.QuerySingleOrDefaultAsync<UserEntity?>(SelectUserByUuidProc, parameters, commandType: CommandType.StoredProcedure, transaction: Transaction);
-            return Result<UserEntity?>.Success(result);
+        try
+        {
+            var result = await Connection.QuerySingleProcedure(StoredProcs.Users.SelectUserByUuid, minecraftUuid, Transaction);
+            return Result<UserEntity>.Success(result);
         } catch (DbException ex) {
-            return Result<UserEntity?>.Failure($"Failed to get user by UUID: {ex.Message}");
+            return Result<UserEntity>.Failure($"Failed to get user by UUID: {ex.Message}");
         }
     }
 
-    public async Task<Result<UserEntity?>> CreateUser(Guid minecraftUuid, string minecraftUsername)
+    public async Task<Result<UserEntity>> CreateUser(Guid minecraftUuid, string minecraftUsername)
     {
-        var parameters = new DynamicParameters();
-        parameters.Add("p_MinecraftUuid", minecraftUuid, DbType.Guid);
-        parameters.Add("p_MinecraftUsername", minecraftUsername, DbType.String, size: 16);
         try {
-            var result = await Connection.QuerySingleOrDefaultAsync<UserEntity?>(
-                InsertUserProc,
-                parameters,
-                commandType: CommandType.StoredProcedure,
-                transaction: Transaction);
-            return Result<UserEntity?>.Success(result);
+            var result = await Connection.QuerySingleProcedure(StoredProcs.Users.InsertUser, (minecraftUuid, minecraftUsername), Transaction);
+            return Result<UserEntity>.Success(result);
         } catch (DbException ex) {
-            return Result<UserEntity?>.Failure($"Failed to create user: {ex.Message}");
+            return Result<UserEntity>.Failure($"Failed to create user: {ex.Message}");
         }
     }
 
-    public async Task<Result<bool>> UpdateUsername(Guid minecraftUuid, string newMinecraftUsername)
+    public async Task<Result> UpdateUsername(Guid minecraftUuid, string newMinecraftUsername)
     {
-        var parameters = new DynamicParameters();
-        parameters.Add("p_MinecraftUuid", minecraftUuid, DbType.Guid);
-        parameters.Add("p_NewUsername", newMinecraftUsername, DbType.String, size: 16);
         try {
-            var rows = await Connection.ExecuteAsync(UpdateUsernameProc, parameters, commandType: CommandType.StoredProcedure, transaction: Transaction);
-            return Result<bool>.Success(rows > 0);
+            var rows = await Connection.ExecuteProcedure(StoredProcs.Users.UpdateUsername, (minecraftUuid, newMinecraftUsername), Transaction);
+            return rows > 0 ? Result.Success() : Result.Failure("No rows were updated.");
         } catch (DbException ex) {
-            return Result<bool>.Failure($"Failed to update username: {ex.Message}");
+            return Result.Failure($"Failed to update username: {ex.Message}");
         }
     }
 }

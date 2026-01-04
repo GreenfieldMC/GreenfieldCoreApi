@@ -1,5 +1,8 @@
 using Asp.Versioning;
 using GreenfieldCoreApi.ApiModels;
+using GreenfieldCoreApi.ApiModels.Connections;
+using GreenfieldCoreServices.Models.Connections.Discord;
+using GreenfieldCoreServices.Models.Connections.Patreon;
 using GreenfieldCoreServices.Services.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -69,14 +72,14 @@ public class UserController(IUserService userService, IPatreonService patreonSer
         return CreatedAtAction(nameof(GetUserByUuid), new { version = HttpContext.GetRequestedApiVersion()?.ToString(), minecraftUuid = created.MinecraftUuid }, created);
     }
 
-    [HttpDelete("{userId:long}/accounts/discord/{discordSnowflake}")]
+    [HttpDelete("{userId:long}/accounts/discord/{discordConnectionId:long}")]
     [Authorize(Roles = "Users.Write.Discord")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> UnlinkDiscordAccount([FromRoute] long userId, [FromRoute] ulong discordSnowflake)
+    public async Task<IActionResult> UnlinkDiscordAccount([FromRoute] long userId, [FromRoute] long discordConnectionId)
     {
-        var unlinkResult = await discordService.UnlinkDiscordAccountReference(userId, discordSnowflake);
+        var unlinkResult = await discordService.UnlinkUserDiscordConnection(userId, discordConnectionId);
         return unlinkResult.IsSuccessful
             ? Ok()
             : Problem(statusCode: unlinkResult.GetStatusCodeInt(), detail: unlinkResult.ErrorMessage);
@@ -86,37 +89,46 @@ public class UserController(IUserService userService, IPatreonService patreonSer
     [Authorize(Roles = "Users.Read")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    [Produces(typeof(IEnumerable<ulong>))]
+    [Produces(typeof(IEnumerable<ApiDiscordAccount>))]
     public async Task<IActionResult> GetDiscordAccountsByUserId([FromRoute] long userId)
     {
-        var userResult = await userService.GetUserByUserId(userId);
-        if (!userResult.TryGetDataNonNull(out var user))
-            return Problem(statusCode: userResult.GetStatusCodeInt(), detail: userResult.ErrorMessage);
+        var userDiscordConnectionsResult = await discordService.GetUserDiscordConnections(userId);;
+        if (!userDiscordConnectionsResult.TryGetDataNonNull(out var userDiscordConnectionsEnum))
+            return Problem(statusCode: userDiscordConnectionsResult.GetStatusCodeInt(), detail: userDiscordConnectionsResult.ErrorMessage);
         
-        var discordAccountsResult = await discordService.GetDiscordAccountsByUserId(userId);
-        if (!discordAccountsResult.TryGetDataNonNull(out var discordAccounts))
-            return Problem(statusCode: discordAccountsResult.GetStatusCodeInt(), detail: discordAccountsResult.ErrorMessage);
+        var userDiscordConnections = userDiscordConnectionsEnum.ToList();
+        var connections = new Dictionary<long, DiscordConnection>();
+        foreach (var userDiscordConnection in userDiscordConnections)
+        {
+            var connectionResult = await discordService.GetDiscordConnection(userDiscordConnection.DiscordConnectionId);
+            if (!connectionResult.TryGetDataNonNull(out var connection))
+                return Problem(statusCode: connectionResult.GetStatusCodeInt(), detail: connectionResult.ErrorMessage);
+            
+            connections[userDiscordConnection.DiscordConnectionId] = connection;
+        }
         
-        var apiModel = discordAccounts.Select(model => new ApiUserDiscordAccount(
-            model.UserDiscordId,
-            user,
-            model.DiscordSnowflake,
-            model.DiscordUsername,
-            model.UpdatedOn,
-            model.CreatedOn
+        var apiModels = userDiscordConnections.Select(model => new ApiDiscordAccount(
+            model.UserDiscordConnectionId,
+            model.DiscordConnectionId,
+            connections[model.DiscordConnectionId].DiscordSnowflake,
+            connections[model.DiscordConnectionId].DiscordUsername,
+            model.ConnectedOn,
+            connections[model.DiscordConnectionId].UpdatedOn,
+            connections[model.DiscordConnectionId].CreatedOn
         ));
-
-        return Ok(apiModel);
+        
+        return Ok(apiModels);
     }
 
-    [HttpDelete("{userId:long}/accounts/patreon/{patreonId:long}")]
+    [HttpDelete("{userId:long}/accounts/patreon/{patreonConnectionId:long}")]
     [Authorize(Roles = "Users.Write.Patreon")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> UnlinkPatreonAccount([FromRoute] long userId, [FromRoute] long patreonId)
+    public async Task<IActionResult> UnlinkPatreonAccount([FromRoute] long userId, [FromRoute] long patreonConnectionId)
     {
-        var unlinkResult = await patreonService.UnlinkPatreonAccountReference(userId, patreonId);
+
+        var unlinkResult = await patreonService.UnlinkUserPatreonConnection(userId, patreonConnectionId);
         return unlinkResult.IsSuccessful
             ? Ok()
             : Problem(statusCode: unlinkResult.GetStatusCodeInt(), detail: unlinkResult.ErrorMessage);
@@ -126,24 +138,32 @@ public class UserController(IUserService userService, IPatreonService patreonSer
     [Authorize(Roles = "Users.Read.Patreon")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    [Produces(typeof(IEnumerable<ApiUserPatreonAccount>))]
+    [Produces(typeof(IEnumerable<ApiPatreonAccount>))]
     public async Task<IActionResult> GetPatreonAccountsByUserId([FromRoute] long userId)
     {
-        var userResult = await userService.GetUserByUserId(userId);
-        if (!userResult.TryGetDataNonNull(out var user))
-            return Problem(statusCode: userResult.GetStatusCodeInt(), detail: userResult.ErrorMessage);
+        var userConnectionResult = await patreonService.GetUserPatreonConnections(userId);
+        if (!userConnectionResult.TryGetDataNonNull(out var userPatreonConnectionsEnum))
+            return Problem(statusCode: userConnectionResult.GetStatusCodeInt(), detail: userConnectionResult.ErrorMessage);
+
+        var userPatreonConnections = userPatreonConnectionsEnum.ToList();
+        var connections = new Dictionary<long, PatreonConnection>();
+        foreach (var userPatreonConnection in userPatreonConnections)
+        {
+            var connectionResult = await patreonService.GetPatreonConnection(userPatreonConnection.PatreonConnectionId);
+            if (!connectionResult.TryGetDataNonNull(out var connection))
+                return Problem(statusCode: connectionResult.GetStatusCodeInt(), detail: connectionResult.ErrorMessage);
+            
+            connections[userPatreonConnection.PatreonConnectionId] = connection;
+        }
         
-        var patreonAccountsResult = await patreonService.GetPatreonAccountsByUserId(userId);
-        if (!patreonAccountsResult.TryGetDataNonNull(out var patreonAccounts))
-            return Problem(statusCode: patreonAccountsResult.GetStatusCodeInt(), detail: patreonAccountsResult.ErrorMessage);
-        
-        var apiModels = patreonAccounts.Select(model => new ApiUserPatreonAccount(
-            model.UserPatreonId,
-            user,
-            model.PatreonId,
-            model.Pledge,
-            model.UpdatedOn,
-            model.CreatedOn
+        var apiModels = userPatreonConnections.Select(model => new ApiPatreonAccount(
+            model.UserPatreonConnectionId,
+            model.PatreonConnectionId,
+            connections[model.PatreonConnectionId].FullName,
+            connections[model.PatreonConnectionId].Pledge,
+            model.ConnectedOn,
+            connections[model.PatreonConnectionId].UpdatedOn,
+            connections[model.PatreonConnectionId].CreatedOn
         ));
         
         return Ok(apiModels);

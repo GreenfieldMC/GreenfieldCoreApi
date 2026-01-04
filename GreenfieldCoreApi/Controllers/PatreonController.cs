@@ -38,6 +38,9 @@ public class PatreonController(IConfiguration configuration, IPatreonService pat
             return ResourceHelpers.Redirect(RedirectType.Error, "./", "Your session state is invalid or has expired. Please retry linking your Patreon account again.");
         }
         
+        if (string.IsNullOrEmpty(code))
+            return ResourceHelpers.Redirect(RedirectType.Error, "./", "Invalid code parameter. Please retry linking your Patreon account again.");
+        
         var linkResult = await patreonApi.LinkPatreonAccountToUser(connectionState.UserId, code);
         
         return linkResult.IsSuccessful
@@ -72,22 +75,22 @@ public class PatreonController(IConfiguration configuration, IPatreonService pat
         return Task.FromResult<IActionResult>(Ok($"https://www.patreon.com/oauth2/authorize?response_type=code&client_id={clientId}&redirect_uri={callbackUri}&state={state}&scope={scopes}"));
     }
 
-    /// <summary>
-    /// Get all Patreon account references by Patreon ID.
-    /// </summary>
-    /// <param name="patreonId"></param>
-    /// <returns></returns>
-    [Authorize(Roles = "Patreon.Read")]
-    [HttpGet("{patreonId:long}/references")]
-    [ProducesResponseType(StatusCodes.Status200OK)]
-    [ProducesResponseType(StatusCodes.Status404NotFound)]
-    [Produces(typeof(IEnumerable<ApiUserPatreonAccount>))]
-    public async Task<IActionResult> GetPatreonReferencesById(long patreonId)
-    {
-        var patreonReferenceResult = await patreonService.GetPatreonAccountsByPatreonId(patreonId);
-        return patreonReferenceResult.TryGetDataNonNull(out var references)
-            ? Ok(references)
-            : Problem(statusCode: patreonReferenceResult.GetStatusCodeInt(), detail: patreonReferenceResult.ErrorMessage);
-    }
+    // /// <summary>
+    // /// Get all Patreon account references by Patreon ID.
+    // /// </summary>
+    // /// <param name="patreonId"></param>
+    // /// <returns></returns>
+    // [Authorize(Roles = "Patreon.Read")]
+    // [HttpGet("{patreonId:long}/references")]
+    // [ProducesResponseType(StatusCodes.Status200OK)]
+    // [ProducesResponseType(StatusCodes.Status404NotFound)]
+    // [Produces(typeof(IEnumerable<ApiUserPatreonAccount>))]
+    // public async Task<IActionResult> GetPatreonReferencesById(long patreonId)
+    // {
+    //     var patreonReferenceResult = await patreonService.GetPatreonConnectionByPatreonId(patreonId);
+    //     return patreonReferenceResult.TryGetDataNonNull(out var references)
+    //         ? Ok(references)
+    //         : Problem(statusCode: patreonReferenceResult.GetStatusCodeInt(), detail: patreonReferenceResult.ErrorMessage);
+    // }
     
 }

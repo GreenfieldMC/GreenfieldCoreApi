@@ -29,6 +29,19 @@ public class BaseCacheService<TKey, TValue> : ICacheService<TKey, TValue> where 
         return false;
     }
 
+    public bool TryGetValuesByPartialKey(Func<TKey, bool> keyPredicate, [MaybeNullWhen(false)] out IEnumerable<TValue> values)
+    {
+        var foundValues = _cache.Where(kv => keyPredicate(kv.Key)).Select(kv => kv.Value).ToImmutableList();
+        if (!foundValues.IsEmpty)
+        {
+            values = foundValues; 
+            return true;
+        }
+
+        values = [];
+        return false;
+    }
+
     public IDictionary<TKey, TValue> GetDictionary() => _cache.ToImmutableDictionary();
 
     public IEnumerable<TKey> GetKeys() => _cache.Keys.ToImmutableList();

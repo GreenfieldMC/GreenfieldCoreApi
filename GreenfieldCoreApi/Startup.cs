@@ -10,6 +10,8 @@ using GreenfieldCoreServices.Commands;
 using GreenfieldCoreServices.Models.BuildApps;
 using GreenfieldCoreServices.Models.BuildCodes;
 using GreenfieldCoreServices.Models.Clients;
+using GreenfieldCoreServices.Models.Connections.Discord;
+using GreenfieldCoreServices.Models.Connections.Patreon;
 using GreenfieldCoreServices.Models.Discord;
 using GreenfieldCoreServices.Models.Patreon;
 using GreenfieldCoreServices.Models.Users;
@@ -58,10 +60,10 @@ public static class Startup
         services.AddTransient<IScriptManager, ScriptManager>();
         services.AddTransient<IClientRepository, ClientRepository>();
         services.AddTransient<IUserRepository, UserRepository>();
-        services.AddTransient<IUserPatreonRepository, UserPatreonRepository>();
-        services.AddTransient<IUserDiscordRepository, UserDiscordRepository>();
-        services.AddTransient<IBuildCodeRepository, BuildCodeRepository>();
-        services.AddTransient<IBuilderApplicationRepository, BuilderApplicationRepository>();
+        services.AddTransient<IPatreonConnectionRepository, PatreonConnectionRepository>();
+        services.AddTransient<IDiscordConnectionRepository, DiscordConnectionRepository>();
+        services.AddTransient<ICodeRepository, CodeRepository>();
+        services.AddTransient<IApplicationRepository, ApplicationRepository>();
     }
     
     internal static void ConfigureScheduledTasks(this IServiceCollection services)
@@ -77,7 +79,7 @@ public static class Startup
         services.AddTransient<IPatreonService, PatreonService>();
         services.AddTransient<IDiscordService, DiscordService>();
         services.AddTransient<IClientAuthService, ClientAuthService>();
-        services.AddTransient<IBuildCodeService, BuildCodeService>();
+        services.AddTransient<ICodeService, CodeService>();
         services.AddTransient<IBuilderApplicationService, BuilderApplicationService>();
         services.AddHttpClient<IPatreonApi, PatreonApi>(client => { client.BaseAddress = new Uri("https://www.patreon.com/api/oauth2/"); });
         services.AddHttpClient<IDiscordApi, DiscordApi>(client => { client.BaseAddress = new Uri("https://discord.com"); });
@@ -90,8 +92,10 @@ public static class Startup
         services.AddSingleton<ICacheService<Guid, Client>, ClientCacheService>();
         services.AddSingleton<ICacheService<long, BuildCode>, BuildCodeCacheService>();
         services.AddSingleton<ICacheService<long, User>, UserCacheService>();
-        services.AddSingleton<ICacheService<long, UserPatreonAccount>, UserPatreonCacheService>();
-        services.AddSingleton<ICacheService<long, UserDiscordAccount>, UserDiscordCacheService>();
+        services.AddSingleton<ICacheService<long, PatreonConnection>, PatreonConnectionCacheService>();
+        services.AddSingleton<ICacheService<(long, long), UserPatreonConnection>, UserPatreonConnectionCacheService>();
+        services.AddSingleton<ICacheService<long, DiscordConnection>, DiscordConnectionCacheService>();
+        services.AddSingleton<ICacheService<(long, long), UserDiscordConnection>, UserDiscordConnectionCacheService>();
         services.AddSingleton<ICacheService<long, BuilderApplication>, BuildAppCacheService>();
         services.AddSingleton<ICacheService<long, PatreonConnectionState>, PatreonConnectionStateCache>();
         services.AddSingleton<ICacheService<long, DiscordConnectionState>, DiscordConnectionStateCache>();

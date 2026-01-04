@@ -1,3 +1,4 @@
+using GreenfieldCoreServices.Models.Connections.Discord;
 using GreenfieldCoreServices.Services.External.Interfaces;
 using GreenfieldCoreServices.Services.Interfaces;
 using Microsoft.Extensions.DependencyInjection;
@@ -39,68 +40,88 @@ public class DiscordTokenRefreshTask(TaskStartSignalService startSignal, IServic
         var discordApi = scope.ServiceProvider.GetRequiredService<IDiscordApi>();
 
         logger.LogInformation("Starting Discord token refresh task at {Time}", DateTimeOffset.Now);
-        var allAccountsResult = await discordService.GetAllDiscordAccounts();
-        if (!allAccountsResult.TryGetDataNonNull(out var accounts))
+        var connectionsResult = await discordService.GetAllDiscordConnections();
+        if (!connectionsResult.TryGetDataNonNull(out var connections))
         {
-            logger.LogWarning("Failed to retrieve Discord accounts for token refresh. Error: {ErrorMessage}", allAccountsResult.ErrorMessage);
+            logger.LogWarning("Failed to retrieve Discord accounts for token refresh. Error: {ErrorMessage}", connectionsResult.ErrorMessage);
             return;
         }
 
-        foreach (var account in accounts)
+        var semaphore = new SemaphoreSlim(4);
+        var refreshTasks = new List<Task>();
+        var totalRefreshed = 0;
+
+        foreach (var connection in connections)
         {
-            var expiresIn = account.RefreshBy - DateTime.Now;
-            if (account.RefreshBy <= DateTime.Now)
+            await semaphore.WaitAsync(cancellationToken);
+            refreshTasks.Add(Task.Run(async () =>
             {
-                logger.LogWarning("Discord token expired for user {UserId} discord {DiscordSnowflake}. Unlinking.", account.UserId, account.DiscordSnowflake);
-                _ = discordService.UnlinkDiscordAccountReference(account.UserId, account.DiscordSnowflake)
-                    .ContinueWith(async t =>
-                    {
-                        var result = await t;
-                        if (!result.IsSuccessful)
-                            logger.LogError("Failed to unlink expired Discord account {DiscordSnowflake} for user {UserId}. Error: {ErrorMessage}", account.DiscordSnowflake, account.UserId, result.ErrorMessage);
-                    }, cancellationToken);
-                continue;
-            }
-
-            if (expiresIn > TimeSpan.FromDays(2))
-                continue;
-
-            var refreshResult = await discordApi.RefreshDiscordAccessTokenAsync(account.RefreshToken);
-            if (!refreshResult.TryGetDataNonNull(out var tokenResponse))
-            {
-                logger.LogError("Failed to refresh Discord token for user {UserId} discord {DiscordSnowflake}. Error: {ErrorMessage}", account.UserId, account.DiscordSnowflake, refreshResult.ErrorMessage);
-                continue;
-            }
-
-            var latestUsername = account.DiscordUsername;
-            var identityResult = await discordApi.GetDiscordIdentity(tokenResponse.AccessToken);
-            if (identityResult.TryGetDataNonNull(out var identity))
-                latestUsername = identity.GlobalName ?? identity.Username;
-            else
-                logger.LogWarning("Failed to fetch Discord identity for user {UserId} discord {DiscordSnowflake}. Username will not be updated. Error: {ErrorMessage}", account.UserId, account.DiscordSnowflake, identityResult.ErrorMessage);
-
-            var updateTokensResult = await discordService.UpdateDiscordAccountTokens(
-                account.UserId,
-                account.DiscordSnowflake,
-                tokenResponse.RefreshToken,
-                tokenResponse.AccessToken,
-                tokenResponse.TokenType,
-                DateTime.Now.AddSeconds(tokenResponse.ExpiresIn),
-                tokenResponse.Scope);
-            if (!updateTokensResult.IsSuccessful)
-            {
-                logger.LogError("Failed to update Discord tokens in database for user {UserId} discord {DiscordSnowflake}. Error: {ErrorMessage}", account.UserId, account.DiscordSnowflake, updateTokensResult.ErrorMessage);
-                continue;
-            }
-
-            if (identityResult.IsSuccessful && latestUsername != account.DiscordUsername)
-            {
-                var updateProfileResult = await discordService.UpdateDiscordAccountProfile(account.UserId, account.DiscordSnowflake, latestUsername);
-                if (!updateProfileResult.IsSuccessful)
-                    logger.LogWarning("Failed to update Discord profile for user {UserId} discord {DiscordSnowflake}. Error: {ErrorMessage}", account.UserId, account.DiscordSnowflake, updateProfileResult.ErrorMessage);
-            }
-
-            logger.LogInformation("Refreshed Discord token for user {UserId} discord {DiscordSnowflake}", account.UserId, account.DiscordSnowflake);
+                try
+                {
+                    if (await RefreshConnection(connection, discordApi, discordService)) 
+                        Interlocked.Increment(ref totalRefreshed);
+                }
+                finally
+                {
+                    semaphore.Release();
+                }
+            }, cancellationToken));
         }
+
+        await Task.WhenAll(refreshTasks);
+        logger.LogInformation("Completed Discord token refresh task at {Time}. Refreshed {Count} tokens.", DateTimeOffset.Now, totalRefreshed);
     }
+
+    private async Task<bool> RefreshConnection(DiscordConnection connection, IDiscordApi discordApi, IDiscordService discordService)
+    {
+        var expiresIn = connection.RefreshBy - DateTime.Now;
+        if (connection.RefreshBy <= DateTime.Now)
+        {
+            logger.LogWarning("RefreshTask {DiscordConnectionId}: Discord token expired. All linked users will be unlinked.", connection.DiscordConnectionId);
+            _ = discordService.DeleteDiscordConnection(connection.DiscordConnectionId);
+            return false;
+        }
+
+        if (expiresIn > TimeSpan.FromDays(2))
+            return false;
+
+        var refreshResult = await discordApi.RefreshDiscordAccessTokenAsync(connection.RefreshToken);
+        if (!refreshResult.TryGetDataNonNull(out var tokenResponse))
+        {
+            logger.LogError("RefreshTask {DiscordConnectionId}: Failed to refresh Discord token. Error: {ErrorMessage}", connection.DiscordConnectionId, refreshResult.ErrorMessage);
+            return false;
+        }
+
+        var latestUsername = connection.DiscordUsername;
+        var identityResult = await discordApi.GetDiscordIdentity(tokenResponse.AccessToken);
+        if (identityResult.TryGetDataNonNull(out var identity))
+            latestUsername = identity.GlobalName ?? identity.Username;
+        else
+            logger.LogWarning("RefreshTask {DiscordConnectionId}: Failed to fetch Discord identity. Their non-token information will not be updated. Error: {ErrorMessage}", connection.DiscordConnectionId, identityResult.ErrorMessage);
+
+        var updateTokensResult = await discordService.UpdateDiscordConnectionTokens(
+            connection.DiscordConnectionId,
+            tokenResponse.RefreshToken,
+            tokenResponse.AccessToken,
+            tokenResponse.TokenType,
+            DateTime.Now.AddSeconds(tokenResponse.ExpiresIn),
+            tokenResponse.Scope);
+        if (!updateTokensResult.IsSuccessful)
+        {
+            logger.LogError("RefreshTask {DiscordConnectionId}: Failed to update Discord tokens in database. Unlinking this connection to prevent future errors. Error: {ErrorMessage}", connection.DiscordConnectionId, updateTokensResult.ErrorMessage);
+            _ = discordService.DeleteDiscordConnection(connection.DiscordConnectionId);
+            return false;
+        }
+
+        if (identityResult.IsSuccessful && latestUsername != connection.DiscordUsername)
+        {
+            var updateProfileResult = await discordService.UpdateDiscordConnectionProfile(connection.DiscordConnectionId, latestUsername);
+            if (!updateProfileResult.IsSuccessful)
+                logger.LogWarning("RefreshTask {DiscordConnectionId}: Failed to update Discord profile. Error: {ErrorMessage}", connection.DiscordConnectionId, updateProfileResult.ErrorMessage);
+        }
+
+        logger.LogInformation("RefreshTask {DiscordConnectionId}: Successfully refreshed Discord token.", connection.DiscordConnectionId);
+        return true;
+    }
+    
 }

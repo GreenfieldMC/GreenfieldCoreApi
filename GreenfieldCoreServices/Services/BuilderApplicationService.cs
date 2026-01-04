@@ -19,7 +19,7 @@ public class BuilderApplicationService(IUnitOfWork uow, ILogger<BuilderApplicati
         string whyJoinGreenfield,
         string? additionalComments)
     {
-        var builderRepo = uow.Repository<IBuilderApplicationRepository>();
+        var builderRepo = uow.Repository<IApplicationRepository>();
         
         uow.BeginTransaction();
         try
@@ -37,7 +37,7 @@ public class BuilderApplicationService(IUnitOfWork uow, ILogger<BuilderApplicati
 
             var application = applicationInsertResult.GetNonNullOrThrow();
             var applicationId = application.ApplicationId;
-            var linkedImages = new List<BuilderAppImageLinkEntity>();
+            var linkedImages = new List<ApplicationImageLinkEntity>();
 
             if (houseBuildLinks.Count > 0)
             {
@@ -75,7 +75,7 @@ public class BuilderApplicationService(IUnitOfWork uow, ILogger<BuilderApplicati
 
     public async Task<Result<bool>> AddApplicationStatus(long applicationId, string status, string? statusMessage)
     {
-        var builderRepo = uow.Repository<IBuilderApplicationRepository>();
+        var builderRepo = uow.Repository<IApplicationRepository>();
         uow.BeginTransaction();
 
         var statusResult = await builderRepo.InsertStatus(applicationId, status, statusMessage);
@@ -89,7 +89,7 @@ public class BuilderApplicationService(IUnitOfWork uow, ILogger<BuilderApplicati
 
         if (buildAppCache.TryGetValue(applicationId, out var cachedApplication))
         {
-            var refreshedStatusesResult = await builderRepo.GetStatusesByApplication(applicationId);
+            var refreshedStatusesResult = await builderRepo.SelectApplicationStatuses(applicationId);
             if (refreshedStatusesResult.IsSuccessful)
             {
                 cachedApplication.BuildAppStatuses = refreshedStatusesResult
@@ -120,8 +120,8 @@ public class BuilderApplicationService(IUnitOfWork uow, ILogger<BuilderApplicati
 
     public async Task<Result<List<ApplicationLatestStatus>>> GetApplicationsFromUser(long userId)
     {
-        var builderRepo = uow.Repository<IBuilderApplicationRepository>();
-        var latestResult = await builderRepo.GetApplicationsWithLatestStatusByUser(userId);
+        var builderRepo = uow.Repository<IApplicationRepository>();
+        var latestResult = await builderRepo.SelectApplicationsWithLatestStatusByUser(userId);
         if (!latestResult.IsSuccessful)
             return Result<List<ApplicationLatestStatus>>.Failure(latestResult.ErrorMessage ?? "Failed to retrieve user applications with latest status.", latestResult.StatusCode);
 
@@ -139,18 +139,18 @@ public class BuilderApplicationService(IUnitOfWork uow, ILogger<BuilderApplicati
         return Result<List<ApplicationLatestStatus>>.Success(results);
     }
 
-    private async Task<Result<BuilderApplication>> GetApplicationInternal(long applicationId, bool bypassCache = false, BuilderApplicationEntity? existingEntity = null, IBuilderApplicationRepository? repository = null)
+    private async Task<Result<BuilderApplication>> GetApplicationInternal(long applicationId, bool bypassCache = false, ApplicationEntity? existingEntity = null, IApplicationRepository? repository = null)
     {
         if (!bypassCache && buildAppCache.TryGetValue(applicationId, out var cachedApplication))
             return Result<BuilderApplication>.Success(cachedApplication);
         
-        var builderRepo = repository ?? uow.Repository<IBuilderApplicationRepository>();
-        BuilderApplicationEntity applicationEntity;
+        var builderRepo = repository ?? uow.Repository<IApplicationRepository>();
+        ApplicationEntity applicationEntity;
         
         if (existingEntity is not null) applicationEntity = existingEntity;
         else
         {
-            var applicationResult = await builderRepo.GetApplicationById(applicationId);
+            var applicationResult = await builderRepo.SelectApplication(applicationId);
 
             if (!applicationResult.IsSuccessful)
                 return Result<BuilderApplication>.Failure(applicationResult.ErrorMessage ?? "Failed to retrieve application.", applicationResult.StatusCode);
@@ -158,11 +158,11 @@ public class BuilderApplicationService(IUnitOfWork uow, ILogger<BuilderApplicati
             applicationEntity = applicationResult.GetNonNullOrThrow();
         }
         
-        var statusesResult = await builderRepo.GetStatusesByApplication(applicationId);
+        var statusesResult = await builderRepo.SelectApplicationStatuses(applicationId);
         if (!statusesResult.IsSuccessful)
             return Result<BuilderApplication>.Failure(statusesResult.ErrorMessage ?? "Failed to retrieve application statuses.", statusesResult.StatusCode);
         
-        var imagesResult = await builderRepo.GetApplicationImages(applicationId);
+        var imagesResult = await builderRepo.SelectApplicationImages(applicationId);
         if (!imagesResult.IsSuccessful)
             return Result<BuilderApplication>.Failure(imagesResult.ErrorMessage ?? "Failed to retrieve application images.", imagesResult.StatusCode);
         
@@ -175,9 +175,9 @@ public class BuilderApplicationService(IUnitOfWork uow, ILogger<BuilderApplicati
     }
 
     private BuilderApplication MapApplicationEntityToModel(long userId, 
-        BuilderApplicationEntity entity,
-        List<BuilderAppStatusEntity> statuses,
-        List<BuilderAppImageLinkEntity> images)
+        ApplicationEntity entity,
+        List<ApplicationStatusEntity> statuses,
+        List<ApplicationImageLinkEntity> images)
     {
         return new BuilderApplication
         {

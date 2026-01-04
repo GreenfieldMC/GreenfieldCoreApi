@@ -1,4 +1,5 @@
 using GreenfieldCoreDataAccess.Database.UnitOfWork;
+using GreenfieldCoreServices.Models.Connections.Patreon;
 using GreenfieldCoreServices.Models.Patreon;
 using GreenfieldCoreServices.Models.Users;
 
@@ -21,6 +22,11 @@ public interface IPatreonApi
     /// <returns></returns>
     Task<Result<PatreonOAuthTokenResponse>> CreatePatreonAccessTokenAsync(string authorizationCode);
     
+    /// <summary>
+    /// Refreshes a Patreon access token using the provided refresh token. /oauth2/token
+    /// </summary>
+    /// <param name="refreshToken"></param>
+    /// <returns></returns>
     Task<Result<PatreonOAuthTokenResponse>> RefreshPatreonAccessTokenAsync(string refreshToken);
 
     /// <summary>
@@ -29,7 +35,7 @@ public interface IPatreonApi
     /// <param name="userId"></param>
     /// <param name="code"></param>
     /// <returns></returns>
-    Task<Result<UserPatreonAccount>> LinkPatreonAccountToUser(long userId, string code);
+    Task<Result<UserPatreonConnection>> LinkPatreonAccountToUser(long userId, string code);
 
     /// <summary>
     /// Attempts to resolve the Patreon campaign ID associated with the configured Patreon integration.

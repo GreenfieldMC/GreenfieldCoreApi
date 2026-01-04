@@ -1,130 +1,185 @@
-using System.Collections.Generic;
-using System.Linq;
 using System.Net;
 using GreenfieldCoreDataAccess.Database.Repositories.Interfaces;
 using GreenfieldCoreDataAccess.Database.UnitOfWork;
-using GreenfieldCoreServices.Models.Users;
+using GreenfieldCoreServices.Models.Connections.Discord;
 using GreenfieldCoreServices.Services.Interfaces;
 
 namespace GreenfieldCoreServices.Services;
 
-public class DiscordService(IUnitOfWork uow, ICacheService<long, UserDiscordAccount> discordAccountCache) : IDiscordService
+public class DiscordService(IUnitOfWork uow, 
+    ICacheService<long, DiscordConnection> discordConnectionCache, 
+    ICacheService<(long userId, long discordConnectionId), UserDiscordConnection> userDiscordConnectionCache) : IDiscordService
 {
-    public async Task<Result<IEnumerable<UserDiscordAccount>>> GetAllDiscordAccounts()
+    
+    public async Task<Result<IEnumerable<DiscordConnection>>> GetAllDiscordConnections()
     {
-        var repo = uow.Repository<IUserDiscordRepository>();
-        var selectAllResult = await repo.SelectAllDiscordAccounts();
+        if (discordConnectionCache.GetCount() != 0)
+            return Result<IEnumerable<DiscordConnection>>.Success(discordConnectionCache.GetValues());
+        
+        var repo = uow.Repository<IDiscordConnectionRepository>();
+        var selectAllResult = await repo.SelectAllConnections();
         return selectAllResult.TryGetDataNonNull(out var accounts)
-            ? Result<IEnumerable<UserDiscordAccount>>.Success(accounts.Select(UserDiscordAccount.FromDbModel))
-            : Result<IEnumerable<UserDiscordAccount>>.Failure("Failed to retrieve Discord accounts.", selectAllResult.StatusCode);
+            ? Result<IEnumerable<DiscordConnection>>.Success(accounts.Select(DiscordConnection.FromDbModel))
+            : Result<IEnumerable<DiscordConnection>>.Failure("Failed to retrieve Discord connections.", selectAllResult.StatusCode);
     }
 
-    public async Task<Result<IEnumerable<UserDiscordAccount>>> GetDiscordAccountsBySnowflake(ulong discordSnowflake)
+    public async Task<Result<DiscordConnection>> GetDiscordConnectionBySnowflake(ulong discordSnowflake)
     {
-        if (discordAccountCache.TryGetValues(a => a.DiscordSnowflake == discordSnowflake, out var cached))
-            return Result<IEnumerable<UserDiscordAccount>>.Success(cached);
+        if (discordConnectionCache.TryGetValue(a => a.DiscordSnowflake == discordSnowflake, out var cached))
+            return Result<DiscordConnection>.Success(cached);
         
-        var repo = uow.Repository<IUserDiscordRepository>();
-        var selectResult = await repo.SelectDiscordAccountsBySnowflake(discordSnowflake);
-        if (!selectResult.IsSuccessful) 
-            return Result<IEnumerable<UserDiscordAccount>>.Failure("Failed to retrieve Discord accounts.", selectResult.StatusCode);
+        var repo = uow.Repository<IDiscordConnectionRepository>();
+        var selectResult = await repo.SelectConnectionBySnowflake(discordSnowflake);
+        if (!selectResult.TryGetDataNonNull(out var accountEnttiy))
+            return Result<DiscordConnection>.Failure("Discord account not found.", HttpStatusCode.NotFound);
         
-        var discordAccounts = selectResult.GetOrDefault([]);
-        var mappedAccounts = discordAccounts.Select(UserDiscordAccount.FromDbModel).ToList();
-        
-        foreach (var account in mappedAccounts)
-            discordAccountCache.SetValue(account.UserDiscordId, account);
-        
-        return Result<IEnumerable<UserDiscordAccount>>.Success(mappedAccounts);
+        var mappedAccount = DiscordConnection.FromDbModel(accountEnttiy);
+        discordConnectionCache.SetValue(mappedAccount.DiscordConnectionId, mappedAccount);
+
+        return Result<DiscordConnection>.Success(mappedAccount);
     }
 
-    public async Task<Result<UserDiscordAccount>> CreateDiscordAccountReference(long userId, ulong discordSnowflake, string? discordUsername, string refreshToken, string accessToken, string tokenType, DateTime tokenExpiry, string scope)
+    public async Task<Result<DiscordConnection>> GetDiscordConnection(long discordConnectionId)
     {
-        var repo = uow.Repository<IUserDiscordRepository>();
+        if (discordConnectionCache.TryGetValue(discordConnectionId, out var cached))
+            return Result<DiscordConnection>.Success(cached);
+
+        var repo = uow.Repository<IDiscordConnectionRepository>();
+        var selectResult = await repo.SelectConnectionById(discordConnectionId);
+        if (!selectResult.TryGetDataNonNull(out var accountEntity))
+            return Result<DiscordConnection>.Failure("Discord account not found.", HttpStatusCode.NotFound);
+
+        var mappedAccount = DiscordConnection.FromDbModel(accountEntity);
+        discordConnectionCache.SetValue(mappedAccount.DiscordConnectionId, mappedAccount);
+
+        return Result<DiscordConnection>.Success(mappedAccount);
+    }
+
+    public async Task<Result<DiscordConnection>> UpdateDiscordConnectionTokens(long discordConnectionId,
+        string refreshToken, string accessToken, string tokenType, DateTime tokenExpiry, string scope)
+    {
+        var repo = uow.Repository<IDiscordConnectionRepository>();
         uow.BeginTransaction();
-        var createResult = await repo.InsertUserDiscordReference(userId, discordSnowflake, discordUsername, refreshToken, accessToken, tokenType, tokenExpiry, scope);
-        if (!createResult.TryGetDataNonNull(out var entity))
-            return Result<UserDiscordAccount>.Failure($"Failed to link Discord account. {createResult.ErrorMessage}");
+        var updateResult = await repo.UpdateConnectionTokens(discordConnectionId, refreshToken, accessToken, tokenType, tokenExpiry, scope);
+        if (!updateResult.IsSuccessful)
+            return Result<DiscordConnection>.Failure("Failed to update Discord account tokens. " + updateResult.ErrorMessage);
         uow.CompleteAndCommit();
 
-        var account = UserDiscordAccount.FromDbModel(entity);
-        discordAccountCache.SetValue(account.UserDiscordId, account);
-        return Result<UserDiscordAccount>.Success(account);
+        discordConnectionCache.RemoveValue(discordConnectionId);
+        return await GetDiscordConnection(discordConnectionId);
     }
 
-    public async Task<Result<UserDiscordAccount>> UpdateDiscordAccountTokens(long userId, ulong discordSnowflake, string refreshToken, string accessToken, string tokenType, DateTime tokenExpiry, string scope)
+    public async Task<Result<DiscordConnection>> UpdateDiscordConnectionProfile(long discordConnectionId, string discordUsername)
     {
-        var repo = uow.Repository<IUserDiscordRepository>();
+        var repo = uow.Repository<IDiscordConnectionRepository>();
         uow.BeginTransaction();
-        var updateResult = await repo.UpdateUserDiscordTokens(userId, discordSnowflake, refreshToken, accessToken, tokenType, tokenExpiry, scope);
-        if (!updateResult.TryGetDataNonNull(out var updated) || !updated)
-            return Result<UserDiscordAccount>.Failure("Failed to update Discord account tokens.");
+        var updateResult = await repo.UpdateConnectionProfile(discordConnectionId, discordUsername);
+        if (!updateResult.IsSuccessful)
+            return Result<DiscordConnection>.Failure("Failed to update Discord account profile. " + updateResult.ErrorMessage);
         uow.CompleteAndCommit();
 
-        discordAccountCache.RemoveValues(a => a.UserId == userId && a.DiscordSnowflake == discordSnowflake);
-        var reloadResult = await GetDiscordAccountByUserIdAndSnowflake(userId, discordSnowflake);
-        return reloadResult.IsSuccessful
-            ? reloadResult
-            : Result<UserDiscordAccount>.Failure(reloadResult.ErrorMessage ?? "Failed to reload Discord account.", reloadResult.StatusCode);
+        discordConnectionCache.RemoveValues(a => a.DiscordConnectionId == discordConnectionId);
+        return await GetDiscordConnection(discordConnectionId);;
     }
 
-    public async Task<Result<UserDiscordAccount>> UpdateDiscordAccountProfile(long userId, ulong discordSnowflake, string? discordUsername)
+    public async Task<Result<DiscordConnection>> CreateDiscordConnection(string refreshToken, string accessToken, string tokenType, DateTime tokenExpiry, string scope, ulong discordSnowflake, string discordUsername)
     {
-        var repo = uow.Repository<IUserDiscordRepository>();
+        var repo = uow.Repository<IDiscordConnectionRepository>();
         uow.BeginTransaction();
-        var updateResult = await repo.UpdateUserDiscordProfile(userId, discordSnowflake, discordUsername ?? string.Empty);
-        if (!updateResult.TryGetDataNonNull(out var updated) || !updated)
-            return Result<UserDiscordAccount>.Failure("Failed to update Discord account profile.");
+        
+        var insertResult = await repo.InsertConnection(refreshToken, accessToken, tokenType, tokenExpiry, scope, discordSnowflake, discordUsername);
+        if (!insertResult.TryGetDataNonNull(out var entity))
+            return Result<DiscordConnection>.Failure("Failed to create Discord connection.");
         uow.CompleteAndCommit();
 
-        discordAccountCache.RemoveValues(a => a.UserId == userId && a.DiscordSnowflake == discordSnowflake);
-        var reloadResult = await GetDiscordAccountByUserIdAndSnowflake(userId, discordSnowflake);
-        return reloadResult.IsSuccessful
-            ? reloadResult
-            : Result<UserDiscordAccount>.Failure(reloadResult.ErrorMessage ?? "Failed to reload Discord account.", reloadResult.StatusCode);
+        var mapped = DiscordConnection.FromDbModel(entity);
+        discordConnectionCache.SetValue(mapped.DiscordConnectionId, mapped);
+        
+        return Result<DiscordConnection>.Success(mapped);
     }
 
-    public async Task<Result> UnlinkDiscordAccountReference(long userId, ulong discordSnowflake)
+    public async Task<Result> DeleteDiscordConnection(long discordConnectionId)
     {
-        var repo = uow.Repository<IUserDiscordRepository>();
+        var repo = uow.Repository<IDiscordConnectionRepository>();
+        
         uow.BeginTransaction();
-        var deleteResult = await repo.DeleteUserDiscordReference(userId, discordSnowflake);
-        if (!deleteResult.TryGetDataNonNull(out var deleted) || !deleted)
-            return Result.Failure("Discord account could not be unlinked.");
+        var deleteResult = await repo.DeleteConnection(discordConnectionId);
+        if (!deleteResult.IsSuccessful)
+            return Result.Failure("Failed to delete Discord connection. " + deleteResult.ErrorMessage);
         uow.CompleteAndCommit();
-
-        discordAccountCache.RemoveValues(a => a.UserId == userId && a.DiscordSnowflake == discordSnowflake);
+        
+        discordConnectionCache.RemoveValue(discordConnectionId);
+        userDiscordConnectionCache.RemoveValues(udc => udc.DiscordConnectionId == discordConnectionId);
+        
         return Result.Success();
     }
 
-    public async Task<Result<UserDiscordAccount>> GetDiscordAccountByUserIdAndSnowflake(long userId, ulong discordSnowflake)
+    public async Task<Result<UserDiscordConnection>> LinkUserToDiscordConnection(long userId, long discordConnectionId)
     {
-        if (discordAccountCache.TryGetValue(a => a.UserId == userId && a.DiscordSnowflake == discordSnowflake, out var cached))
-            return Result<UserDiscordAccount>.Success(cached);
+        var repo = uow.Repository<IDiscordConnectionRepository>();
+        
+        uow.BeginTransaction();
+        var insertResult = await repo.InsertUserDiscordConnection(userId, discordConnectionId);
+        if (!insertResult.TryGetDataNonNull(out var entity))
+            return Result<UserDiscordConnection>.Failure("Discord account could not be linked.");
+        uow.CompleteAndCommit();
 
-        var repo = uow.Repository<IUserDiscordRepository>();
-        var accountResult = await repo.SelectUserDiscordAccount(userId, discordSnowflake);
-        if (!accountResult.TryGetDataNonNull(out var entity))
-            return Result<UserDiscordAccount>.Failure("Discord account not found.", HttpStatusCode.NotFound);
+        var mapped = UserDiscordConnection.FromDbModel(entity);
+        userDiscordConnectionCache.SetValue((userId, discordConnectionId), mapped);
 
-        var mapped = UserDiscordAccount.FromDbModel(entity);
-        discordAccountCache.SetValue(mapped.UserDiscordId, mapped);
-        return Result<UserDiscordAccount>.Success(mapped);
+        return Result<UserDiscordConnection>.Success(mapped);
     }
 
-    public async Task<Result<IEnumerable<UserDiscordAccount>>> GetDiscordAccountsByUserId(long userId)
+    public async Task<Result> UnlinkUserDiscordConnection(long userId, long discordConnectionId)
     {
-        if (discordAccountCache.TryGetValues(a => a.UserId == userId, out var cached))
-            return Result<IEnumerable<UserDiscordAccount>>.Success(cached);
+        var repo = uow.Repository<IDiscordConnectionRepository>();
+        
+        uow.BeginTransaction();
+        var deleteResult = await repo.DeleteUserDiscordConnection(userId, discordConnectionId);
+        if (!deleteResult.IsSuccessful)
+            return Result.Failure("Discord account could not be unlinked. " + deleteResult.ErrorMessage);
+        uow.CompleteAndCommit();
+        
+        userDiscordConnectionCache.RemoveValue((userId, discordConnectionId));
+        
+        return Result.Success();
+    }
 
-        var repo = uow.Repository<IUserDiscordRepository>();
-        var accountsResult = await repo.SelectUserDiscordReferences(userId);
-        if (!accountsResult.TryGetDataNonNull(out var entities))
-            return Result<IEnumerable<UserDiscordAccount>>.Failure("Failed to retrieve Discord accounts.", accountsResult.StatusCode);
+    public async Task<Result<UserDiscordConnection>> GetUserDiscordConnection(long userId, long discordConnectionId)
+    {
+        if (userDiscordConnectionCache.TryGetValue((userId, discordConnectionId), out var cached)) 
+            return Result<UserDiscordConnection>.Success(cached);
+        
+        var repo = uow.Repository<IDiscordConnectionRepository>();
+        var selectResult = await repo.SelectUserDiscordConnections(userId);
+        
+        if (!selectResult.TryGetDataNonNull(out var entities))
+            return Result<UserDiscordConnection>.Failure("Failed to retrieve Discord connection.");
 
-        var mapped = entities.Select(UserDiscordAccount.FromDbModel).ToList();
+        var mapped = entities.Select(UserDiscordConnection.FromDbModel).ToList();
         foreach (var account in mapped)
-            discordAccountCache.SetValue(account.UserDiscordId, account);
-        return Result<IEnumerable<UserDiscordAccount>>.Success(mapped);
+            userDiscordConnectionCache.SetValue((userId, account.DiscordConnectionId), account);
+        
+        var found = mapped.FirstOrDefault(a => a.DiscordConnectionId == discordConnectionId);
+        return found is not null
+            ? Result<UserDiscordConnection>.Success(found)
+            : Result<UserDiscordConnection>.Failure("Discord connection not found.", HttpStatusCode.NotFound);
+    }
+
+    public async Task<Result<IEnumerable<UserDiscordConnection>>> GetUserDiscordConnections(long userId)
+    {
+        if (userDiscordConnectionCache.TryGetValuesByPartialKey(key => key.userId == userId, out var cached))
+            return Result<IEnumerable<UserDiscordConnection>>.Success(cached);
+        
+        var repo = uow.Repository<IDiscordConnectionRepository>();
+        var selectResult = await repo.SelectUserDiscordConnections(userId);
+        if (!selectResult.TryGetDataNonNull(out var entities))
+            return Result<IEnumerable<UserDiscordConnection>>.Failure("Failed to retrieve user Discord connections.");
+
+        var mapped = entities.Select(UserDiscordConnection.FromDbModel).ToList();
+        foreach (var account in mapped)
+            userDiscordConnectionCache.SetValue((userId, account.DiscordConnectionId), account);
+
+        return Result<IEnumerable<UserDiscordConnection>>.Success(mapped);
     }
 }

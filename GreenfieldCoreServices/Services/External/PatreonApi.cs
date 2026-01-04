@@ -1,7 +1,7 @@
 using System.Text.Json;
 using GreenfieldCoreDataAccess.Database.UnitOfWork;
+using GreenfieldCoreServices.Models.Connections.Patreon;
 using GreenfieldCoreServices.Models.Patreon;
-using GreenfieldCoreServices.Models.Users;
 using GreenfieldCoreServices.Services.External.Interfaces;
 using GreenfieldCoreServices.Services.Interfaces;
 using Microsoft.Extensions.Configuration;
@@ -82,31 +82,37 @@ public class PatreonApi(IConfiguration configuration, HttpClient client, IPatreo
             : Result<PatreonOAuthTokenResponse>.Success(model);
     }
 
-    public async Task<Result<UserPatreonAccount>> LinkPatreonAccountToUser(long userId, string code)
+    public async Task<Result<UserPatreonConnection>> LinkPatreonAccountToUser(long userId, string code)
     {
         var campaignIdTask = ResolveCampaignId();
         
         var tokenResult = await CreatePatreonAccessTokenAsync(code);
         if (!tokenResult.TryGetDataNonNull(out var tokenData))
-            return Result<UserPatreonAccount>.Failure(tokenResult.ErrorMessage!, tokenResult.StatusCode);
+            return Result<UserPatreonConnection>.Failure(tokenResult.ErrorMessage!, tokenResult.StatusCode);
 
         var identityResult = await GetPatreonIdentity(tokenData.AccessToken);
         if (!identityResult.TryGetDataNonNull(out var identityData))
-            return Result<UserPatreonAccount>.Failure(identityResult.ErrorMessage!, identityResult.StatusCode);
+            return Result<UserPatreonConnection>.Failure(identityResult.ErrorMessage!, identityResult.StatusCode);
 
         if (!long.TryParse(identityData.Data.Id, out var patreonId))
-            return Result<UserPatreonAccount>.Failure("Failed to parse Patreon ID.");
+            return Result<UserPatreonConnection>.Failure("Failed to parse Patreon ID.");
 
         var campaignIdResult = await campaignIdTask;
         if (!campaignIdResult.TryGetDataNonNull(out var campaignId))
-            return Result<UserPatreonAccount>.Failure(campaignIdResult.ErrorMessage!, campaignIdResult.StatusCode);
+            return Result<UserPatreonConnection>.Failure(campaignIdResult.ErrorMessage!, campaignIdResult.StatusCode);
         
         var pledge = identityData.GetPledgedAmountOfCampaign(campaignId);
         var fullName = identityData.Data.Attributes?.FullName ?? "Unknown Patreon User";
-        var linkResult = await patreonService.CreatePatreonAccountReference(userId, patreonId, tokenData.RefreshToken, tokenData.AccessToken, tokenData.TokenType, DateTime.Now.AddSeconds(tokenData.ExpiresIn), tokenData.Scope, fullName, pledge);
+
+        var createConnectionResult = await patreonService.CreatePatreonConnection(tokenData.RefreshToken, tokenData.AccessToken, tokenData.TokenType, DateTime.Now.AddSeconds(tokenData.ExpiresIn), tokenData.Scope, patreonId, fullName, pledge);
+        if (!createConnectionResult.TryGetDataNonNull(out var patreonConnection))
+            return Result<UserPatreonConnection>.Failure(createConnectionResult.ErrorMessage!, createConnectionResult.StatusCode);
+
+        var linkResult = await patreonService.LinkUserToPatreonConnection(userId, patreonConnection.PatreonConnectionId);
+        
         return !linkResult.TryGetDataNonNull(out var userPatreonAccount) 
-            ? Result<UserPatreonAccount>.Failure(linkResult.ErrorMessage!, linkResult.StatusCode) 
-            : Result<UserPatreonAccount>.Success(userPatreonAccount);
+            ? Result<UserPatreonConnection>.Failure(linkResult.ErrorMessage!, linkResult.StatusCode) 
+            : Result<UserPatreonConnection>.Success(userPatreonAccount);
     }
 
     public async Task<Result<string>> ResolveCampaignId()

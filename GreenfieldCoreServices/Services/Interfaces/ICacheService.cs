@@ -4,6 +4,7 @@ namespace GreenfieldCoreServices.Services.Interfaces;
 
 public interface ICacheService<TKey, TValue>
 {
+    
     /// <summary>
     /// Tries to get a value from the cache by key.
     /// </summary>
@@ -27,6 +28,14 @@ public interface ICacheService<TKey, TValue>
     /// <param name="values">The values that match the predicate, or null if none found.</param>
     /// <returns>True if matching values were found; otherwise, false.</returns>
     bool TryGetValues(Func<TValue, bool> predicate, [MaybeNullWhen(false)] out IEnumerable<TValue> values);
+    
+    /// <summary>
+    /// Tries to get multiple values from the cache by partial key match.
+    /// </summary>
+    /// <param name="keyPredicate">The key predicate to match.</param>
+    /// <param name="values">The values that match the key predicate, or null if none found.</param>
+    /// <returns>True if matching values were found; otherwise, false.</returns>
+    bool TryGetValuesByPartialKey(Func<TKey, bool> keyPredicate, [MaybeNullWhen(false)] out IEnumerable<TValue> values);
     
     /// <summary>
     /// Get a copy of the entire cache dictionary.

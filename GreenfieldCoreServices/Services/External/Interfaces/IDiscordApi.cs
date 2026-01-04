@@ -1,4 +1,5 @@
 using GreenfieldCoreDataAccess.Database.UnitOfWork;
+using GreenfieldCoreServices.Models.Connections.Discord;
 using GreenfieldCoreServices.Models.Discord;
 using GreenfieldCoreServices.Models.Users;
 
@@ -32,5 +33,5 @@ public interface IDiscordApi
     /// </summary>
     /// <param name="userId">Internal user ID to link.</param>
     /// <param name="code">Discord authorization code.</param>
-    Task<Result<UserDiscordAccount>> LinkDiscordAccountToUser(long userId, string code);
+    Task<Result<UserDiscordConnection>> LinkDiscordAccountToUser(long userId, string code);
 }

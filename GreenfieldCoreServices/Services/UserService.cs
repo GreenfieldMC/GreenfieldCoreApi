@@ -14,7 +14,7 @@ public class UserService(IUnitOfWork uow, ICacheService<long, User> userCache) :
             return Result<User>.Failure("A valid username must be provided.");
         var repo = uow.Repository<IUserRepository>();
         
-        var didFindUser = userCache.TryGetValue(u => u.MinecraftUuid == minecraftUuid, out _) || (await repo.GetUserByUuid(minecraftUuid)).GetOrThrow() is not null;
+        var didFindUser = userCache.TryGetValue(u => u.MinecraftUuid == minecraftUuid, out _) || (await repo.SelectUserByUuid(minecraftUuid)).GetOrThrow() is not null;
         if (didFindUser) return Result<User>.Failure("User already exists.", HttpStatusCode.Conflict);
         
         uow.BeginTransaction();
@@ -32,7 +32,7 @@ public class UserService(IUnitOfWork uow, ICacheService<long, User> userCache) :
             return Result<User>.Success(cachedUser);
         
         var repo = uow.Repository<IUserRepository>();
-        var foundUser = (await repo.GetUserByUuid(minecraftUuid)).GetOrThrow();
+        var foundUser = (await repo.SelectUserByUuid(minecraftUuid)).GetOrThrow();
         return foundUser is null ? Result<User>.Failure("User not found.", HttpStatusCode.NotFound) : Result<User>.Success(User.FromDbModel(foundUser));
     }
 
@@ -42,7 +42,7 @@ public class UserService(IUnitOfWork uow, ICacheService<long, User> userCache) :
             return Result<User>.Success(cachedUser);
         
         var repo = uow.Repository<IUserRepository>();
-        var foundUser = (await repo.GetUserByUserId(userId)).GetOrThrow();
+        var foundUser = (await repo.SelectUserByUserId(userId)).GetOrThrow();
         return foundUser is null ? Result<User>.Failure("User not found.", HttpStatusCode.NotFound) : Result<User>.Success(User.FromDbModel(foundUser));
     }
 
@@ -59,9 +59,10 @@ public class UserService(IUnitOfWork uow, ICacheService<long, User> userCache) :
         var existingUser = existingUserResult.GetNonNullOrThrow();
         
         uow.BeginTransaction();
-        var updateResult = (await repo.UpdateUsername(minecraftUuid, newUsername)).GetOrThrow();
-        if (!updateResult) return Result<User>.Failure("Username could not be updated.");
+        var updateResult = await repo.UpdateUsername(minecraftUuid, newUsername);
+        if (!updateResult.IsSuccessful) return Result<User>.Failure(updateResult.ErrorMessage ?? "Failed to update username.");
         uow.CompleteAndCommit();
+        
         existingUser.Username = newUsername;
         userCache.SetValue(existingUser.UserId, existingUser);
         return Result<User>.Success(existingUser);

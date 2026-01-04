@@ -77,7 +77,7 @@ public class DiscordController(IConfiguration configuration, IDiscordService dis
     [HttpGet("{discordSnowflake}/references")]
     public async Task<IActionResult> GetDiscordReferencesById(ulong discordSnowflake)
     {
-        var discordReferenceResult = await discordService.GetDiscordAccountsBySnowflake(discordSnowflake);
+        var discordReferenceResult = await discordService.GetDiscordConnectionBySnowflake(discordSnowflake);
         return discordReferenceResult.TryGetDataNonNull(out var references)
             ? Ok(references)
             : Problem(statusCode: discordReferenceResult.GetStatusCodeInt(), detail: discordReferenceResult.ErrorMessage);

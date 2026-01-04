@@ -1,7 +1,7 @@
 using System.Text.Json;
 using GreenfieldCoreDataAccess.Database.UnitOfWork;
+using GreenfieldCoreServices.Models.Connections.Discord;
 using GreenfieldCoreServices.Models.Discord;
-using GreenfieldCoreServices.Models.Users;
 using GreenfieldCoreServices.Services.External.Interfaces;
 using GreenfieldCoreServices.Services.Interfaces;
 using Microsoft.Extensions.Configuration;
@@ -35,10 +35,9 @@ public class DiscordApi(IConfiguration configuration, HttpClient client, IDiscor
             { "client_secret", configuration["Discord:ClientSecret"]! },
             { "redirect_uri", configuration["Discord:RedirectUri"]! }
         };
-        using var request = new HttpRequestMessage(HttpMethod.Post, new Uri("/api/oauth2/token", UriKind.Relative))
-        {
-            Content = new FormUrlEncodedContent(parameters)
-        };
+        using var request = new HttpRequestMessage(HttpMethod.Post, new Uri("/api/oauth2/token", UriKind.Relative));
+        request.Content = new FormUrlEncodedContent(parameters);
+        
         var response = await client.SendAsync(request);
         if (!response.IsSuccessStatusCode)
             return Result<DiscordOAuthTokenResponse>.Failure($"Failed to create Discord access token. {response.ReasonPhrase}", response.StatusCode);
@@ -59,10 +58,9 @@ public class DiscordApi(IConfiguration configuration, HttpClient client, IDiscor
             { "client_id", configuration["Discord:ClientId"]! },
             { "client_secret", configuration["Discord:ClientSecret"]! }
         };
-        using var request = new HttpRequestMessage(HttpMethod.Post, new Uri("/api/oauth2/token", UriKind.Relative))
-        {
-            Content = new FormUrlEncodedContent(parameters)
-        };
+        using var request = new HttpRequestMessage(HttpMethod.Post, new Uri("/api/oauth2/token", UriKind.Relative));
+        request.Content = new FormUrlEncodedContent(parameters);
+        
         var response = await client.SendAsync(request);
         if (!response.IsSuccessStatusCode)
             return Result<DiscordOAuthTokenResponse>.Failure($"Failed to refresh Discord access token. {response.ReasonPhrase}", response.StatusCode);
@@ -74,30 +72,27 @@ public class DiscordApi(IConfiguration configuration, HttpClient client, IDiscor
             : Result<DiscordOAuthTokenResponse>.Success(model);
     }
 
-    public async Task<Result<UserDiscordAccount>> LinkDiscordAccountToUser(long userId, string code)
+    public async Task<Result<UserDiscordConnection>> LinkDiscordAccountToUser(long userId, string code)
     {
         var tokenResult = await CreateDiscordAccessTokenAsync(code);
         if (!tokenResult.TryGetDataNonNull(out var tokenData))
-            return Result<UserDiscordAccount>.Failure(tokenResult.ErrorMessage!, tokenResult.StatusCode);
+            return Result<UserDiscordConnection>.Failure(tokenResult.ErrorMessage!, tokenResult.StatusCode);
 
         var identityResult = await GetDiscordIdentity(tokenData.AccessToken);
         if (!identityResult.TryGetDataNonNull(out var identity))
-            return Result<UserDiscordAccount>.Failure(identityResult.ErrorMessage!, identityResult.StatusCode);
+            return Result<UserDiscordConnection>.Failure(identityResult.ErrorMessage!, identityResult.StatusCode);
 
         if (!ulong.TryParse(identity.Id, out var discordSnowflake))
-            return Result<UserDiscordAccount>.Failure("Failed to parse Discord user id.");
+            return Result<UserDiscordConnection>.Failure("Failed to parse Discord user id.");
 
-        var linkResult = await discordService.CreateDiscordAccountReference(
-            userId,
-            discordSnowflake,
-            identity.GlobalName ?? identity.Username,
-            tokenData.RefreshToken,
-            tokenData.AccessToken,
-            tokenData.TokenType,
-            DateTime.Now.AddSeconds(tokenData.ExpiresIn),
-            tokenData.Scope);
-        return !linkResult.TryGetDataNonNull(out var discordAccount)
-            ? Result<UserDiscordAccount>.Failure(linkResult.ErrorMessage!, linkResult.StatusCode)
-            : Result<UserDiscordAccount>.Success(discordAccount);
+        var createConnection = await discordService.CreateDiscordConnection(tokenData.RefreshToken, tokenData.AccessToken, tokenData.TokenType, DateTime.Now.AddSeconds(tokenData.ExpiresIn), tokenData.Scope, discordSnowflake, identity.GlobalName ?? identity.Username);
+        if (!createConnection.TryGetDataNonNull(out var connection))
+            return Result<UserDiscordConnection>.Failure(createConnection.ErrorMessage!, createConnection.StatusCode);
+
+        var linkResult = await discordService.LinkUserToDiscordConnection(userId, connection.DiscordConnectionId);
+        
+        return !linkResult.TryGetDataNonNull(out var userConnection)
+            ? Result<UserDiscordConnection>.Failure(linkResult.ErrorMessage!, linkResult.StatusCode)
+            : Result<UserDiscordConnection>.Success(userConnection);
     }
 }

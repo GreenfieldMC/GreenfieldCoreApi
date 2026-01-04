@@ -1,136 +1,188 @@
 using System.Net;
 using GreenfieldCoreDataAccess.Database.Repositories.Interfaces;
 using GreenfieldCoreDataAccess.Database.UnitOfWork;
-using GreenfieldCoreServices.Models.Users;
+using GreenfieldCoreServices.Models.Connections.Patreon;
 using GreenfieldCoreServices.Services.Interfaces;
 
 namespace GreenfieldCoreServices.Services;
 
-public class PatreonService(IUnitOfWork uow, ICacheService<long, UserPatreonAccount> patreonCache) : IPatreonService
+public class PatreonService(IUnitOfWork uow, 
+    ICacheService<long, PatreonConnection> patreonConnectionCache, 
+    ICacheService<(long userId, long patreonConnectionId), UserPatreonConnection> userPatreonConnectionCache) : IPatreonService
 {
-    
-    public async Task<Result<IEnumerable<UserPatreonAccount>>> GetAllPatreonAccounts()
+    public async Task<Result<IEnumerable<UserPatreonConnection>>> GetUserPatreonConnections(long userId)
     {
-        var repo = uow.Repository<IUserPatreonRepository>();
-        var selectAllResult = await repo.SelectAllPatreonAccounts();
+        if (userPatreonConnectionCache.TryGetValuesByPartialKey(key => key.userId == userId, out var cached))
+            return Result<IEnumerable<UserPatreonConnection>>.Success(cached);
         
-        return selectAllResult.TryGetDataNonNull(out var patreonAccounts)
-            ? Result<IEnumerable<UserPatreonAccount>>.Success(patreonAccounts.Select(UserPatreonAccount.FromDbModel))
-            : Result<IEnumerable<UserPatreonAccount>>.Failure("Failed to retrieve Patreon accounts.", selectAllResult.StatusCode);
+        var repo = uow.Repository<IPatreonConnectionRepository>();
+        var selectResult = await repo.SelectUserPatreonConnections(userId);
+        if (!selectResult.TryGetDataNonNull(out var userPatreonConnectionEntities))
+            return Result<IEnumerable<UserPatreonConnection>>.Failure("Failed to retrieve user Patreon connections.", selectResult.StatusCode);
+
+        var mapped = userPatreonConnectionEntities.Select(UserPatreonConnection.FromDbModel).ToList();
+        foreach (var connection in mapped)
+            userPatreonConnectionCache.SetValue((userId, connection.PatreonConnectionId), connection);
+        
+        return Result<IEnumerable<UserPatreonConnection>>.Success(mapped);
     }
 
-    public async Task<Result<UserPatreonAccount>> CreatePatreonAccountReference(long userId, long patreonId, string refreshToken, string accessToken, string tokenType, DateTime tokenExpiry, string scope, string fullName, decimal? pledge)
+    public async Task<Result<IEnumerable<PatreonConnection>>> GetAllPatreonConnections()
     {
-        var repo = uow.Repository<IUserPatreonRepository>();
+        if (patreonConnectionCache.GetCount() != 0)
+            return Result<IEnumerable<PatreonConnection>>.Success(patreonConnectionCache.GetValues());
         
-        uow.BeginTransaction();
-        var createReferenceResult = await repo.InsertUserPatreonReference(userId, patreonId, refreshToken, accessToken, tokenType, tokenExpiry, scope, fullName, pledge);
-        if (!createReferenceResult.TryGetDataNonNull(out var patreonEntity))
-            return Result<UserPatreonAccount>.Failure($"Failed to link Patreon account. {createReferenceResult.ErrorMessage}");
-        uow.CompleteAndCommit();
-        
-        var account = UserPatreonAccount.FromDbModel(patreonEntity);
-        patreonCache.SetValue(account.UserPatreonId, account);
-
-        return Result<UserPatreonAccount>.Success(account);
+        var repo = uow.Repository<IPatreonConnectionRepository>();
+        var selectResult = await repo.SelectAllConnections();
+        return selectResult.TryGetDataNonNull(out var accountEntities)
+            ? Result<IEnumerable<PatreonConnection>>.Success(accountEntities.Select(PatreonConnection.FromDbModel))
+            : Result<IEnumerable<PatreonConnection>>.Failure("Failed to retrieve Patreon connections.", selectResult.StatusCode);
     }
 
-    public async Task<Result<UserPatreonAccount>> UpdatePatreonAccountTokens(long userId, long patreonId, string refreshToken, string accessToken, string tokenType, DateTime tokenExpiry, string scope)
+    public async Task<Result<PatreonConnection>> GetPatreonConnectionByPatreonId(long patreonId)
     {
-        var repo = uow.Repository<IUserPatreonRepository>();
+        if (patreonConnectionCache.TryGetValue(c => c.PatreonId == patreonId, out var cached))
+            return Result<PatreonConnection>.Success(cached);
+
+        var repo = uow.Repository<IPatreonConnectionRepository>();
+        var selectResult = await repo.SelectConnectionByPatreonId(patreonId);
+        if (!selectResult.TryGetDataNonNull(out var accountEntity)) 
+            return Result<PatreonConnection>.Failure("Patreon account not found.", HttpStatusCode.NotFound);
         
-        uow.BeginTransaction();
-        var result = await repo.UpdateUserPatreonTokens(userId, patreonId, refreshToken, accessToken, tokenType, tokenExpiry, scope);
-        if (!result.TryGetDataNonNull(out var updatedTokens) || !updatedTokens)
-            return Result<UserPatreonAccount>.Failure("Failed to update Patreon account tokens.");
-        uow.CompleteAndCommit();
+        var mappedAccount = PatreonConnection.FromDbModel(accountEntity);
+        patreonConnectionCache.SetValue(mappedAccount.PatreonConnectionId, mappedAccount);
         
-        patreonCache.RemoveValues(a => a.UserId == userId && a.PatreonId == patreonId);
-        
-        var patreonAccountResult = await GetPatreonAccountByUserIdAndPatreonId(userId, patreonId);
-        return !patreonAccountResult.IsSuccessful 
-            ? Result<UserPatreonAccount>.Failure($"Failed to retrieve updated Patreon account. {patreonAccountResult.ErrorMessage}", patreonAccountResult.StatusCode)
-            : patreonAccountResult;
+        return Result<PatreonConnection>.Success(mappedAccount);
     }
 
-    public async Task<Result<UserPatreonAccount>> UpdatePatreonAccountInfo(long userId, long patreonId, string fullName, decimal? pledge)
+    public async Task<Result<PatreonConnection>> CreatePatreonConnection(string refreshToken, string accessToken, string tokenType, DateTime tokenExpiry,
+        string scope, long patreonId, string fullName, decimal? pledge)
     {
-        var repo = uow.Repository<IUserPatreonRepository>();
-        
+        var repo = uow.Repository<IPatreonConnectionRepository>();
         uow.BeginTransaction();
-        var result = await repo.UpdateUserPatreonInfo(userId, patreonId, fullName, pledge);
-        if (!result.TryGetDataNonNull(out var updatedUser))
-            return Result<UserPatreonAccount>.Failure("Failed to update Patreon pledge amount.");
+        
+        var insertResult = await repo.InsertConnection(refreshToken, accessToken, tokenType, tokenExpiry, scope, patreonId, fullName, pledge);
+        if (!insertResult.TryGetDataNonNull(out var entitiy))
+            return Result<PatreonConnection>.Failure("Failed to create Patreon connection.", insertResult.StatusCode);
         uow.CompleteAndCommit();
         
-        patreonCache.RemoveValues(a => a.UserId == userId && a.PatreonId == patreonId);
-        patreonCache.SetValue(updatedUser.UserPatreonId, UserPatreonAccount.FromDbModel(updatedUser));
-
-        return Result<UserPatreonAccount>.Success(UserPatreonAccount.FromDbModel(updatedUser));
+        var mapped = PatreonConnection.FromDbModel(entitiy);
+        patreonConnectionCache.SetValue(mapped.PatreonConnectionId, mapped);
+        
+        return Result<PatreonConnection>.Success(mapped);
     }
 
-    public async Task<Result> UnlinkPatreonAccountReference(long userId, long patreonId)
+    public async Task<Result> DeletePatreonConnection(long patreonConnectionId)
     {
-        var repo = uow.Repository<IUserPatreonRepository>();
+        var repo = uow.Repository<IPatreonConnectionRepository>();
+        
         uow.BeginTransaction();
-        var deleteResult = await repo.DeleteUserPatreonReference(userId, patreonId);
-        if (!deleteResult.TryGetDataNonNull(out var result) || !result) return Result.Failure("Patreon account could not be unlinked.");
+        var deleteResult = await repo.DeleteConnection(patreonConnectionId);
+        if (!deleteResult.IsSuccessful)
+            return Result.Failure("Failed to delete Patreon connection. " + deleteResult.ErrorMessage);
         uow.CompleteAndCommit();
 
-        patreonCache.RemoveValues(a => a.PatreonId == patreonId && a.UserId == userId);
+        patreonConnectionCache.RemoveValue(patreonConnectionId);
+        userPatreonConnectionCache.RemoveValues(udc => udc.PatreonConnectionId == patreonConnectionId);
 
         return Result.Success();
     }
 
-    public async Task<Result<UserPatreonAccount>> GetPatreonAccountByUserIdAndPatreonId(long userId, long patreonId)
+    public async Task<Result<UserPatreonConnection>> LinkUserToPatreonConnection(long userId, long patreonConnectionId)
     {
-        if (patreonCache.TryGetValue(a => a.UserId == userId && a.PatreonId == patreonId, out var cachedAccount))
-            return Result<UserPatreonAccount>.Success(cachedAccount);
+        var repo = uow.Repository<IPatreonConnectionRepository>();
         
-        var repo = uow.Repository<IUserPatreonRepository>();
-        
-        var accountResult = await repo.SelectUserPatreonAccount(userId, patreonId);
-        if (!accountResult.TryGetDataNonNull(out var patreonAccount))
-            return Result<UserPatreonAccount>.Failure("Patreon account not found.", HttpStatusCode.NotFound);
-        
-        var mappedAccount = UserPatreonAccount.FromDbModel(patreonAccount);
-        patreonCache.SetValue(mappedAccount.UserPatreonId, mappedAccount);
-        return Result<UserPatreonAccount>.Success(mappedAccount);
+        uow.BeginTransaction();
+        var insertResult = await repo.InsertUserPatreonConnection(userId, patreonConnectionId);
+        if (!insertResult.TryGetDataNonNull(out var entity))
+            return Result<UserPatreonConnection>.Failure("Failed to link user to Patreon connection.", insertResult.StatusCode);
+        uow.CompleteAndCommit();
+
+        var mapped = UserPatreonConnection.FromDbModel(entity);
+        userPatreonConnectionCache.SetValue((userId, patreonConnectionId), mapped);
+
+        return Result<UserPatreonConnection>.Success(mapped);
     }
 
-    public async Task<Result<IEnumerable<UserPatreonAccount>>> GetPatreonAccountsByUserId(long userId)
+    public async Task<Result> UnlinkUserPatreonConnection(long userId, long patreonConnectionId)
     {
-        if (patreonCache.TryGetValues(a => a.UserId == userId, out var cachedAccounts))
-            return Result<IEnumerable<UserPatreonAccount>>.Success(cachedAccounts);
-        
-        var repo = uow.Repository<IUserPatreonRepository>();
-        var patreonAccountsResult = await repo.SelectUserPatreonReferences(userId);
-        if (!patreonAccountsResult.IsSuccessful) return Result<IEnumerable<UserPatreonAccount>>.Failure("Failed to retrieve Patreon accounts.", patreonAccountsResult.StatusCode);
+        var repo = uow.Repository<IPatreonConnectionRepository>();
 
-        var patreonAccounts = patreonAccountsResult.GetOrDefault([]);
-        var mappedAccounts = patreonAccounts.Select(UserPatreonAccount.FromDbModel).ToList();
-        
-        foreach (var account in mappedAccounts)
-            patreonCache.SetValue(account.UserPatreonId, account);
-        
-        return Result<IEnumerable<UserPatreonAccount>>.Success(mappedAccounts);
+        uow.BeginTransaction();
+        var deleteResult = await repo.DeleteUserPatreonConnection(userId, patreonConnectionId);
+        if (!deleteResult.IsSuccessful)
+            return Result.Failure("Failed to unlink user from Patreon connection. " + deleteResult.ErrorMessage);
+        uow.CompleteAndCommit();
+
+        userPatreonConnectionCache.RemoveValue((userId, patreonConnectionId));
+
+        return Result.Success();
     }
 
-    public async Task<Result<IEnumerable<UserPatreonAccount>>> GetPatreonAccountsByPatreonId(long patreonId)
+    public async Task<Result<PatreonConnection>> UpdatePatreonConnectionTokens(long patreonConnectionId, string refreshToken, string accessToken, string tokenType, DateTime tokenExpiry, string scope)
     {
-        if (patreonCache.TryGetValues(a => a.PatreonId == patreonId, out var cachedAccounts))
-            return Result<IEnumerable<UserPatreonAccount>>.Success(cachedAccounts);
+        var repo = uow.Repository<IPatreonConnectionRepository>();
         
-        var repo = uow.Repository<IUserPatreonRepository>();
-        var patreonAccountsResult = await repo.SelectUserPatreonAccountByPatreonId(patreonId);
-        if (!patreonAccountsResult.IsSuccessful) return Result<IEnumerable<UserPatreonAccount>>.Failure("Failed to retrieve Patreon accounts.", patreonAccountsResult.StatusCode);
+        uow.BeginTransaction();
+        var updateResult = await repo.UpdateConnectionTokens(patreonConnectionId, refreshToken, accessToken, tokenType, tokenExpiry, scope);
+        if (!updateResult.IsSuccessful)
+            return Result<PatreonConnection>.Failure("Failed to update Patreon connection tokens. " + updateResult.ErrorMessage);
+        uow.CompleteAndCommit();
 
-        var patreonAccounts = patreonAccountsResult.GetOrDefault([]);
-        var mappedAccounts = patreonAccounts.Select(UserPatreonAccount.FromDbModel).ToList();
+        patreonConnectionCache.RemoveValue(patreonConnectionId);
+        
+        return await GetPatreonConnection(patreonConnectionId);
+    }
 
-        foreach (var account in mappedAccounts)
-            patreonCache.SetValue(account.UserPatreonId, account);
+    public async Task<Result<PatreonConnection>> UpdatePatreonConnectionProfile(long patreonConnectionId,
+        string fullName, decimal? pledge)
+    {
+        var repo = uow.Repository<IPatreonConnectionRepository>();
+        
+        uow.BeginTransaction();
+        var updateResult = await repo.UpdateConnectionProfile(patreonConnectionId, fullName, pledge);
+        if (!updateResult.IsSuccessful)
+            return Result<PatreonConnection>.Failure("Failed to update Patreon connection profile. " + updateResult.ErrorMessage);
+        uow.CompleteAndCommit();
 
-        return Result<IEnumerable<UserPatreonAccount>>.Success(mappedAccounts);
+        patreonConnectionCache.RemoveValue(patreonConnectionId);
+        
+        return await GetPatreonConnection(patreonConnectionId);
+    }
+
+    public async Task<Result<UserPatreonConnection>> GetUserPatreonConnection(long userId, long patreonConnectionId)
+    {
+        if (userPatreonConnectionCache.TryGetValue((userId, patreonConnectionId), out var cached))
+            return Result<UserPatreonConnection>.Success(cached);
+
+        var repo = uow.Repository<IPatreonConnectionRepository>();
+        var selectResult = await repo.SelectUserPatreonConnections(userId);
+        if (!selectResult.TryGetDataNonNull(out var userPatreonConnectionEntities))
+            return Result<UserPatreonConnection>.Failure("Failed to retrieve user Patreon connections.", selectResult.StatusCode);
+
+        var mappedList = userPatreonConnectionEntities.Select(UserPatreonConnection.FromDbModel).ToList();
+        foreach (var connection in mappedList)
+            userPatreonConnectionCache.SetValue((userId, connection.PatreonConnectionId), connection);
+
+        var mapped = mappedList.FirstOrDefault(c => c.PatreonConnectionId == patreonConnectionId);
+        return mapped is null
+            ? Result<UserPatreonConnection>.Failure("User Patreon connection not found.", HttpStatusCode.NotFound)
+            : Result<UserPatreonConnection>.Success(mapped);
+    }
+
+    public async Task<Result<PatreonConnection>> GetPatreonConnection(long patreonConnectionId)
+    {
+        if (patreonConnectionCache.TryGetValue(patreonConnectionId, out var cached))
+            return Result<PatreonConnection>.Success(cached);
+
+        var repo = uow.Repository<IPatreonConnectionRepository>();
+        var selectResult = await repo.SelectConnectionById(patreonConnectionId);
+        if (!selectResult.TryGetDataNonNull(out var entity))
+            return Result<PatreonConnection>.Failure("Patreon connection not found.", HttpStatusCode.NotFound);
+
+        var mapped = PatreonConnection.FromDbModel(entity);
+        patreonConnectionCache.SetValue(mapped.PatreonConnectionId, mapped);
+
+        return Result<PatreonConnection>.Success(mapped);
     }
 }
