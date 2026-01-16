@@ -2,7 +2,7 @@ using GreenfieldCoreDataAccess.Database.Models;
 
 namespace GreenfieldCoreServices.Models.Users;
 
-public class User : IDbModelConvertable<UserEntity, User>
+public class User : IModelConvertable<UserEntity, User>
 {
     
     /// <summary>
@@ -25,7 +25,7 @@ public class User : IDbModelConvertable<UserEntity, User>
     /// </summary>
     public required DateTime CreatedOn { get; set; }
 
-    public static User FromDbModel(UserEntity from)
+    public static User FromModel(UserEntity from)
     {
         return new User
         {

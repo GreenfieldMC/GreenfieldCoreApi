@@ -10,9 +10,9 @@ public record UserDiscordAccount(
     string RefreshToken,
     DateTime RefreshBy,
     DateTime? UpdatedOn,
-    DateTime CreatedOn) : IDbModelConvertable<UserDiscordEntity, UserDiscordAccount>
+    DateTime CreatedOn) : IModelConvertable<UserDiscordEntity, UserDiscordAccount>
 {
-    public static UserDiscordAccount FromDbModel(UserDiscordEntity from)
+    public static UserDiscordAccount FromModel(UserDiscordEntity from)
     {
         return new UserDiscordAccount(
             from.UserDiscordId,

@@ -8,14 +8,13 @@ using Microsoft.AspNetCore.Mvc;
 namespace GreenfieldCoreApi.Controllers;
 
 [ApiController]
-[Authorize(Roles = "BuildCodes")]
 [ApiVersion("1.0")]
 [Route("api/v{version:apiVersion}/[controller]")]
 [Produces("application/json")]
 public class BuildCodeController(ICodeService codeService) : ControllerBase
 {
     [HttpGet("all")]
-    [Authorize(Roles = "BuildCodes.Read")]
+    [Authorize(Roles = "Codes.Read,Codes")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [Produces(typeof(IEnumerable<BuildCode>))]
     public async Task<IActionResult> GetAll([FromQuery] bool showDeleted = false)
@@ -27,7 +26,7 @@ public class BuildCodeController(ICodeService codeService) : ControllerBase
     }
 
     [HttpGet("{id:long}")]
-    [Authorize(Roles = "BuildCodes.Read")]
+    [Authorize(Roles = "Codes.Read,Codes")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [Produces(typeof(BuildCode))]
@@ -40,7 +39,7 @@ public class BuildCodeController(ICodeService codeService) : ControllerBase
     }
 
     [HttpPost]
-    [Authorize(Roles = "BuildCodes.Write")]
+    [Authorize(Roles = "Codes.Write,Codes")]
     [ProducesResponseType(StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [Produces(typeof(BuildCode))]
@@ -54,7 +53,7 @@ public class BuildCodeController(ICodeService codeService) : ControllerBase
     }
 
     [HttpPatch("{id:long}")]
-    [Authorize(Roles = "BuildCodes.Write")]
+    [Authorize(Roles = "Codes.Write,Codes")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -68,7 +67,7 @@ public class BuildCodeController(ICodeService codeService) : ControllerBase
     }
 
     [HttpDelete("{id:long}")]
-    [Authorize(Roles = "BuildCodes.Write")]
+    [Authorize(Roles = "Codes.Write,Codes")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [Produces(typeof(BuildCode))]

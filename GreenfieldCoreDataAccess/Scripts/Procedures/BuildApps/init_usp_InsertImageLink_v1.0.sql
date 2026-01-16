@@ -18,6 +18,7 @@ begin
         bali.ApplicationId,
         bali.LinkType,
         bali.ImageLink,
+        bali.UpdatedOn,
         bali.CreatedOn
     from `BuildApps.ImageLinks` bali
     where bali.ImageLinkId = last_insert_id();

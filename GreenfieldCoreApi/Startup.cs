@@ -98,7 +98,9 @@ public static class Startup
         services.AddSingleton<ICacheService<(long, long), UserDiscordConnection>, UserDiscordConnectionCacheService>();
         services.AddSingleton<ICacheService<long, BuilderApplication>, BuildAppCacheService>();
         services.AddSingleton<ICacheService<long, PatreonConnectionState>, PatreonConnectionStateCache>();
+        services.AddSingleton<ICacheService<(long userId, long patreonConnectionId), PatreonDisconnectState>, PatreonDisconnectStateCache>();
         services.AddSingleton<ICacheService<long, DiscordConnectionState>, DiscordConnectionStateCache>();
+        services.AddSingleton<ICacheService<(long userId, long discordConnectionId), DiscordDisconnectState>, DiscordDisconnectStateCache>();
     }
 
     internal static void ConfigureConfiguration(this IConfigurationBuilder configBuilder, IWebHostEnvironment env)

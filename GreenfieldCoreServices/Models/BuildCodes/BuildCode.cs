@@ -2,14 +2,14 @@ using GreenfieldCoreDataAccess.Database.Models;
 
 namespace GreenfieldCoreServices.Models.BuildCodes;
 
-public class BuildCode : IDbModelConvertable<BuildCodeEntity, BuildCode>
+public class BuildCode : IModelConvertable<BuildCodeEntity, BuildCode>
 {
     public required long CodeId { get; set; }
     public required int ListOrder { get; set; }
     public required string Code { get; set; }
     public required DateTime CreatedOn { get; set; }
     
-    public static BuildCode FromDbModel(BuildCodeEntity from)
+    public static BuildCode FromModel(BuildCodeEntity from)
     {
         return new BuildCode
         {

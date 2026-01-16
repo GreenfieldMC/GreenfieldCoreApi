@@ -100,5 +100,12 @@ public interface IPatreonService
     /// <param name="patreonConnectionId">The internal Patreon connection ID</param>
     /// <returns></returns>
     public Task<Result<PatreonConnection>> GetPatreonConnection(long patreonConnectionId);
+    
+    /// <summary>
+    /// Gets all users linked to a given Patreon connection ID.
+    /// </summary>
+    /// <param name="patreonConnectionId">Internal Patreon connection ID.</param>
+    /// <returns></returns>
+    public Task<Result<IEnumerable<UserPatreonConnection>>> GetUsersByPatreonConnectionId(long patreonConnectionId);
 
 }

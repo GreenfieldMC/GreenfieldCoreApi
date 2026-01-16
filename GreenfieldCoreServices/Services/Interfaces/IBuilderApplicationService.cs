@@ -8,10 +8,12 @@ public interface IBuilderApplicationService
 
     //this will submit the application to the database and mark it as 
     Task<Result<long>> SubmitApplication(long userId, int age,
-        string? nationality, List<string> houseBuildLinks, List<string> otherBuildLinks,
+        string? nationality, List<(string Link, string ImageType)> images,
         string? additionalBuildingInformation, string whyJoinGreenfield, string? additionalComments);
 
     Task<Result<bool>> AddApplicationStatus(long applicationId, string status, string? statusMessage);
+    
+    Task<Result> UpdateApplicationImage(long imageLinkId, string newImageLink, string newImageType);
     
     Task<Result<BuilderApplication>> GetApplicationById(long applicationId);
     

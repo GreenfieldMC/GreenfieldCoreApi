@@ -8,5 +8,4 @@ public class BaseRepository(IUnitOfWork uow)
     internal IDbConnection Connection => uow.Connection;
 
     internal IDbTransaction? Transaction => uow.Transaction;
-    
 }

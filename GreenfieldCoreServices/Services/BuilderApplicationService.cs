@@ -13,8 +13,7 @@ public class BuilderApplicationService(IUnitOfWork uow, ILogger<BuilderApplicati
     public async Task<Result<long>> SubmitApplication(long userId,
         int age,
         string? nationality,
-        List<string> houseBuildLinks,
-        List<string> otherBuildLinks,
+        List<(string Link, string ImageType)> images,
         string? additionalBuildingInformation,
         string whyJoinGreenfield,
         string? additionalComments)
@@ -39,25 +38,23 @@ public class BuilderApplicationService(IUnitOfWork uow, ILogger<BuilderApplicati
             var applicationId = application.ApplicationId;
             var linkedImages = new List<ApplicationImageLinkEntity>();
 
-            if (houseBuildLinks.Count > 0)
+            var anyFailedImageInserts = false;
+            if (images.Count > 0)
             {
-                foreach (var link in houseBuildLinks.Where(link => !string.IsNullOrWhiteSpace(link)))
+                foreach (var image in images)
                 {
-                    var imageResult = await builderRepo.InsertImage(applicationId, "House", link);
+                    var imageResult = await builderRepo.InsertImage(applicationId, image.ImageType, image.Link);
                     if (imageResult.IsSuccessful) linkedImages.Add(imageResult.GetNonNullOrThrow());
-                    else logger.LogWarning("Failed to insert house image for builder application {ApplicationId} (link: {Link}). {Error}", applicationId, link, imageResult.ErrorMessage);
+                    else
+                    {
+                        anyFailedImageInserts = true;
+                        logger.LogWarning("Failed to insert image for builder application {ApplicationId} (link: {Link}). {Error}", applicationId, image.Link, imageResult.ErrorMessage);
+                    }
                 }
             }
-
-            if (otherBuildLinks.Count > 0)
-            {
-                foreach (var link in otherBuildLinks.Where(link => !string.IsNullOrWhiteSpace(link)))
-                {
-                    var imageResult = await builderRepo.InsertImage(applicationId, "Other", link);
-                    if (imageResult.IsSuccessful) linkedImages.Add(imageResult.GetNonNullOrThrow());
-                    else logger.LogWarning("Failed to insert other image for builder application {ApplicationId} (link: {Link}). {Error}", applicationId, link, imageResult.ErrorMessage);
-                }
-            }
+            
+            if (anyFailedImageInserts)
+                return Result<long>.Failure("One or more images failed to be linked to the application.", HttpStatusCode.PartialContent);
             
             uow.CompleteAndCommit();
             
@@ -113,6 +110,25 @@ public class BuilderApplicationService(IUnitOfWork uow, ILogger<BuilderApplicati
         }
 
         return Result<bool>.Success(true);
+    }
+
+    public async Task<Result> UpdateApplicationImage(long imageLinkId, string newImageLink, string newImageType)
+    {
+        var builderRepo = uow.Repository<IApplicationRepository>();
+        uow.BeginTransaction();
+        
+        var updateResult = await builderRepo.UpdateImage(imageLinkId, newImageLink, newImageType);
+        if (!updateResult.IsSuccessful)
+            return Result.Failure(updateResult.ErrorMessage ?? "Failed to update application image.", updateResult.StatusCode);
+        
+        uow.CompleteAndCommit();
+        
+        // Invalidate cache for the application that owns this image.
+        var imageEntity = updateResult.GetNonNullOrThrow();
+        if (buildAppCache.TryGetValue(imageEntity.ApplicationId, out var cachedApplication)) 
+            buildAppCache.RemoveValue(imageEntity.ApplicationId);
+        
+        return Result.Success();
     }
 
     public Task<Result<BuilderApplication>> GetApplicationById(long applicationId) =>
@@ -192,13 +208,8 @@ public class BuilderApplicationService(IUnitOfWork uow, ILogger<BuilderApplicati
             BuildAppStatuses = statuses
                 .Select(s => new BuildAppStatus(s.Status, s.StatusMessage, s.CreatedOn))
                 .ToList(),
-            HouseBuilds = images
-                .Where(img => string.Equals(img.LinkType, "House", StringComparison.OrdinalIgnoreCase))
-                .Select(img => new BuildAppImage(img.ImageLink, img.LinkType, img.CreatedOn))
-                .ToList(),
-            OtherBuilds = images
-                .Where(img => string.Equals(img.LinkType, "Other", StringComparison.OrdinalIgnoreCase))
-                .Select(img => new BuildAppImage(img.ImageLink, img.LinkType, img.CreatedOn))
+            Images = images
+                .Select(img => new BuildAppImage(img.ImageLinkId, img.ImageLink, img.LinkType, img.CreatedOn))
                 .ToList()
         };
     }

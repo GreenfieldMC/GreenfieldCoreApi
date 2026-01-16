@@ -1,7 +1,9 @@
 using Asp.Versioning;
 using GreenfieldCoreApi.ApiModels;
+using GreenfieldCoreApi.ApiModels.Connections;
 using GreenfieldCoreApi.Extensions;
 using GreenfieldCoreServices.Models.Patreon;
+using GreenfieldCoreServices.Models.Users;
 using GreenfieldCoreServices.Services.External.Interfaces;
 using GreenfieldCoreServices.Services.Interfaces;
 using Microsoft.AspNetCore.Authorization;
@@ -10,10 +12,9 @@ using Microsoft.AspNetCore.Mvc;
 namespace GreenfieldCoreApi.Controllers;
 
 [ApiController]
-[Authorize(Roles = "Patreon")]
 [ApiVersion("1.0")]
 [Route("api/v{version:apiVersion}/[controller]")]
-public class PatreonController(IConfiguration configuration, IPatreonService patreonService, IPatreonApi patreonApi, ICacheService<long, PatreonConnectionState> cacheService) : ControllerBase
+public class PatreonController(IConfiguration configuration, IPatreonService patreonService, IUserService userService, IPatreonApi patreonApi, ICacheService<long, PatreonConnectionState> cacheService, ICacheService<(long userId, long patreonConnectionId), PatreonDisconnectState> disconnectStateCache) : ControllerBase
 {
  
     /// <summary>
@@ -23,18 +24,15 @@ public class PatreonController(IConfiguration configuration, IPatreonService pat
     /// <param name="code">Contains the authorization code returned by Patreon</param>
     /// <returns></returns>
     [AllowAnonymous]
-    [HttpGet("callback")]
+    [HttpGet("oauth/callback")]
     [ProducesResponseType(StatusCodes.Status302Found)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status500InternalServerError)]
-    public async Task<IActionResult> ConnectionCallback([FromQuery] string state, [FromQuery] string code)
+    public async Task<IActionResult> ConnectionCallback([FromQuery] Guid state, [FromQuery] string code)
     {
-        if (!Guid.TryParse(state, out var stateId)) 
-            return ResourceHelpers.Redirect(RedirectType.Error, "./", "Could not parse your session state. Please retry linking your Patreon account again.");
-
-        if (!cacheService.TryGetValue(s => s.StateId == stateId, out var connectionState) || connectionState.Timestamp < DateTime.UtcNow.AddHours(-1))
+        if (!cacheService.TryGetValue(s => s.StateId == state, out var connectionState) || connectionState.Timestamp < DateTime.UtcNow.AddHours(-1))
         {
-            cacheService.RemoveValues(s => s.StateId == stateId);
+            cacheService.RemoveValues(s => s.StateId == state);
             return ResourceHelpers.Redirect(RedirectType.Error, "./", "Your session state is invalid or has expired. Please retry linking your Patreon account again.");
         }
         
@@ -43,9 +41,60 @@ public class PatreonController(IConfiguration configuration, IPatreonService pat
         
         var linkResult = await patreonApi.LinkPatreonAccountToUser(connectionState.UserId, code);
         
+        if (linkResult.IsSuccessful)
+            cacheService.RemoveValues(s => s.StateId == state);
+        
         return linkResult.IsSuccessful
             ? ResourceHelpers.Redirect(RedirectType.Info, connectionState.RedirectUrl, "Your Patreon account has been successfully linked!")
             : ResourceHelpers.Redirect(RedirectType.Error, "./", $"Failed to link your Patreon account: {linkResult.ErrorMessage}");
+    }
+    
+    /// <summary>
+    /// Patreon OAuth disconnect callback.
+    /// </summary>
+    /// <param name="state"></param>
+    /// <returns></returns>
+    [AllowAnonymous]
+    [HttpGet("oauth/disconnect")]
+    public async Task<IActionResult> Disconnect([FromQuery] Guid state)
+    {
+        if (!disconnectStateCache.TryGetValue(s => s.StateId == state, out var disconnectState) || disconnectState.Timestamp < DateTime.UtcNow.AddHours(-1))
+        {
+            disconnectStateCache.RemoveValues(s => s.StateId == state);
+            return ResourceHelpers.Redirect(RedirectType.Error, "./", "Your session state is invalid or has expired. Please retry unlinking your Patreon account again.");
+        }
+
+        var unlinkResult = await patreonService.UnlinkUserPatreonConnection(disconnectState.UserId, disconnectState.PatreonConnectionId);
+        
+        if (unlinkResult.IsSuccessful)
+            disconnectStateCache.RemoveValues(s => s.StateId == state);
+
+        return unlinkResult.IsSuccessful
+            ? ResourceHelpers.Redirect(RedirectType.Info, disconnectState.RedirectUrl, "Your Patreon account has been successfully unlinked!")
+            : ResourceHelpers.Redirect(RedirectType.Error, "./", $"Failed to unlink your Patreon account: {unlinkResult.ErrorMessage}");
+    }
+    
+    /// <summary>
+    /// Get the Patreon disconnect link for a user.
+    /// </summary>
+    /// <param name="userId"></param>
+    /// <param name="patreonConnectionId"></param>
+    /// <param name="redirectUrl"></param>
+    /// <returns></returns>
+    [Authorize(Roles = "Patreon.OAuth")]
+    [HttpGet("oauth/disconnect-link")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [Produces(typeof(string))]
+    public Task<IActionResult> GetPatreonDisconnectLink([FromQuery] long userId, [FromQuery] long patreonConnectionId, [FromQuery] string redirectUrl)
+    {
+        if (disconnectStateCache.TryGetValue((userId, patreonConnectionId), out var existingState) && existingState.Timestamp >= DateTime.UtcNow.AddHours(-1) && existingState.RedirectUrl == redirectUrl)
+            return Task.FromResult<IActionResult>(Ok($"{configuration["Patreon:DisconnectUri"]}?state={Uri.EscapeDataString(existingState.StateId.ToString())}"));
+        
+        var newState = new PatreonDisconnectState(Guid.NewGuid(), DateTime.UtcNow, userId, patreonConnectionId, redirectUrl);
+        disconnectStateCache.SetValue((userId, patreonConnectionId), newState);
+
+        var state = Uri.EscapeDataString(newState.StateId.ToString());
+        return Task.FromResult<IActionResult>(Ok($"{configuration["Patreon:DisconnectUri"]}?state={state}"));
     }
     
     /// <summary>
@@ -56,7 +105,7 @@ public class PatreonController(IConfiguration configuration, IPatreonService pat
     /// <returns></returns>
     /// <exception cref="InvalidOperationException"></exception>
     [Authorize(Roles = "Patreon.OAuth")]
-    [HttpGet("connection-link")]
+    [HttpGet("oauth/connection-link")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [Produces<string>]
     public Task<IActionResult> GetPatreonConnectionLink([FromQuery] long userId, [FromQuery] string redirectUrl)
@@ -75,22 +124,45 @@ public class PatreonController(IConfiguration configuration, IPatreonService pat
         return Task.FromResult<IActionResult>(Ok($"https://www.patreon.com/oauth2/authorize?response_type=code&client_id={clientId}&redirect_uri={callbackUri}&state={state}&scope={scopes}"));
     }
 
-    // /// <summary>
-    // /// Get all Patreon account references by Patreon ID.
-    // /// </summary>
-    // /// <param name="patreonId"></param>
-    // /// <returns></returns>
-    // [Authorize(Roles = "Patreon.Read")]
-    // [HttpGet("{patreonId:long}/references")]
-    // [ProducesResponseType(StatusCodes.Status200OK)]
-    // [ProducesResponseType(StatusCodes.Status404NotFound)]
-    // [Produces(typeof(IEnumerable<ApiUserPatreonAccount>))]
-    // public async Task<IActionResult> GetPatreonReferencesById(long patreonId)
-    // {
-    //     var patreonReferenceResult = await patreonService.GetPatreonConnectionByPatreonId(patreonId);
-    //     return patreonReferenceResult.TryGetDataNonNull(out var references)
-    //         ? Ok(references)
-    //         : Problem(statusCode: patreonReferenceResult.GetStatusCodeInt(), detail: patreonReferenceResult.ErrorMessage);
-    // }
-    
+    [Authorize(Roles = "Patreon.Read")]
+    [HttpGet("connections/{patreonConnectionId:long}")]
+    [ProducesResponseType(typeof(ApiPatreonConnection), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiPatreonConnectionWithUsers), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetPatreonConnectionByConnectionId([FromRoute] long patreonConnectionId,
+        [FromQuery] bool includeUsers = false)
+    {
+        var patreonConnectionResult = await patreonService.GetPatreonConnection(patreonConnectionId);
+        if (!patreonConnectionResult.TryGetDataNonNull(out var patreonConnection))
+            return Problem(statusCode: patreonConnectionResult.GetStatusCodeInt(),
+                detail: patreonConnectionResult.ErrorMessage);
+
+        if (!includeUsers) return Ok(patreonConnection);
+
+        var userConnectionsResult = await patreonService.GetUsersByPatreonConnectionId(patreonConnectionId);
+        if (!userConnectionsResult.TryGetDataNonNull(out var userConnectionsEnum))
+            return Problem(statusCode: userConnectionsResult.GetStatusCodeInt(),
+                detail: userConnectionsResult.ErrorMessage);
+
+        var userConnections = userConnectionsEnum.ToList();
+        var userList = new List<User>();
+
+        foreach (var uconn in userConnections)
+        {
+            var userResult = await userService.GetUserByUserId(uconn.UserId);
+            if (userResult.TryGetDataNonNull(out var userModel))
+                userList.Add(userModel);
+        }
+
+        var mappedWithUsers = new ApiPatreonConnectionWithUsers
+        {
+            PatreonConnectionId = patreonConnection.PatreonConnectionId,
+            Users = userList,
+            UpdatedOn = patreonConnection.UpdatedOn,
+            CreatedOn = patreonConnection.CreatedOn,
+            FullName = patreonConnection.FullName,
+            Pledge = patreonConnection.Pledge
+        };
+        return Ok(mappedWithUsers);
+    }
 }

@@ -15,6 +15,7 @@ public record ApplicationImageLinkEntity(
     long ApplicationId,
     string LinkType,
     string ImageLink,
+    DateTime? UpdatedOn,
     DateTime CreatedOn);
 
 public record ApplicationStatusEntity(

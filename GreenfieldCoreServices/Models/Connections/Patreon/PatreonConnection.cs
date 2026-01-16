@@ -2,7 +2,7 @@ using GreenfieldCoreDataAccess.Database.Models;
 
 namespace GreenfieldCoreServices.Models.Connections.Patreon;
 
-public record PatreonConnection : IDbModelConvertable<PatreonConnectionEntity, PatreonConnection>
+public record PatreonConnection : IModelConvertable<PatreonConnectionEntity, PatreonConnection>
 {
     
     public required long PatreonConnectionId { get; init; }
@@ -15,7 +15,7 @@ public record PatreonConnection : IDbModelConvertable<PatreonConnectionEntity, P
     public required string FullName { get; init; }
     public required decimal? Pledge { get; init; }
     
-    public static PatreonConnection FromDbModel(PatreonConnectionEntity from)
+    public static PatreonConnection FromModel(PatreonConnectionEntity from)
     {
         return new PatreonConnection
         {
@@ -31,14 +31,14 @@ public record PatreonConnection : IDbModelConvertable<PatreonConnectionEntity, P
     }
 }
 
-public record UserPatreonConnection : IDbModelConvertable<UserPatreonConnectionEntity, UserPatreonConnection>
+public record UserPatreonConnection : IModelConvertable<UserPatreonConnectionEntity, UserPatreonConnection>
 {
     public required long UserPatreonConnectionId { get; init; }
     public required long UserId { get; init; }
     public required long PatreonConnectionId { get; init; }
     public required DateTime ConnectedOn { get; init; }
 
-    public static UserPatreonConnection FromDbModel(UserPatreonConnectionEntity from)
+    public static UserPatreonConnection FromModel(UserPatreonConnectionEntity from)
     {
         return new UserPatreonConnection
         {

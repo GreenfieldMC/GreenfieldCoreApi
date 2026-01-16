@@ -553,6 +553,14 @@ public static class StoredProcs
             return parms;
         });
 
+        public static readonly ParameterizedQuerySingleProcedure<ApplicationImageLinkEntity, (long imageLinkId, string newImageLink, string newLinkType)> UpdateImageLink = new("`BuildApps.usp_UpdateImageLink`", (args, parms) =>
+        {
+            parms.Add("p_ImageLinkId", args.imageLinkId, DbType.Int64);
+            parms.Add("p_ImageLink", args.newImageLink, DbType.String, size: 2048);
+            parms.Add("p_LinkType", args.newLinkType, DbType.String, size: 256);
+            return parms;
+        });
+        
         /// <summary>
         /// Selects a builder application by its ID.
         /// </summary>

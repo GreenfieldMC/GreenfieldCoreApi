@@ -21,7 +21,7 @@ public class UserService(IUnitOfWork uow, ICacheService<long, User> userCache) :
         var created = (await repo.CreateUser(minecraftUuid, username)).GetOrThrow();
         if (created is null) return Result<User>.Failure("User could not be created.");
         uow.CompleteAndCommit();
-        var createdUser = User.FromDbModel(created);
+        var createdUser = User.FromModel(created);
         userCache.SetValue(createdUser.UserId, createdUser);
         return Result<User>.Success(createdUser);
     }
@@ -33,7 +33,7 @@ public class UserService(IUnitOfWork uow, ICacheService<long, User> userCache) :
         
         var repo = uow.Repository<IUserRepository>();
         var foundUser = (await repo.SelectUserByUuid(minecraftUuid)).GetOrThrow();
-        return foundUser is null ? Result<User>.Failure("User not found.", HttpStatusCode.NotFound) : Result<User>.Success(User.FromDbModel(foundUser));
+        return foundUser is null ? Result<User>.Failure("User not found.", HttpStatusCode.NotFound) : Result<User>.Success(User.FromModel(foundUser));
     }
 
     public async Task<Result<User>> GetUserByUserId(long userId)
@@ -43,7 +43,7 @@ public class UserService(IUnitOfWork uow, ICacheService<long, User> userCache) :
         
         var repo = uow.Repository<IUserRepository>();
         var foundUser = (await repo.SelectUserByUserId(userId)).GetOrThrow();
-        return foundUser is null ? Result<User>.Failure("User not found.", HttpStatusCode.NotFound) : Result<User>.Success(User.FromDbModel(foundUser));
+        return foundUser is null ? Result<User>.Failure("User not found.", HttpStatusCode.NotFound) : Result<User>.Success(User.FromModel(foundUser));
     }
 
     public async Task<Result<User>> UpdateUsername(Guid minecraftUuid, string newUsername)

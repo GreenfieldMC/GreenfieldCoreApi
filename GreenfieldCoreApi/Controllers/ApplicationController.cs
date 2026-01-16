@@ -9,24 +9,22 @@ namespace GreenfieldCoreApi.Controllers;
 
 [ApiController]
 [ApiVersion("1.0")]
-[Authorize(Roles = "BuilderApplications")]
 [Route("api/v{version:apiVersion}/[controller]")]
 [Produces("application/json")]
-public class BuilderApplicationController(IBuilderApplicationService buildAppService) : ControllerBase
+public class ApplicationController(IBuilderApplicationService buildAppService) : ControllerBase
 {
     
     [HttpPost("submit")]
-    [Authorize(Roles = "BuilderApplications.Submit")]
+    [Authorize(Roles = "Applications.Write,Applications")]
     [ProducesResponseType(StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [Produces(typeof(long))]
-    public async Task<IActionResult> SubmitApplication([FromBody] BuilderApplicationSubmitModel application)
+    public async Task<IActionResult> SubmitApplication([FromBody] ApiApplicationSubmissionModel application)
     {
         var appIdResult = await buildAppService.SubmitApplication(application.UserId,
             application.Age,
             application.Nationality,
-            application.HouseBuildLinks,
-            application.OtherBuildLinks,
+            application.Images.Select(i => (i.ImageLink, i.ImageType)).ToList(),
             application.AdditionalBuildingInformation,
             application.WhyJoinGreenfield,
             application.AdditionalComments);
@@ -38,21 +36,21 @@ public class BuilderApplicationController(IBuilderApplicationService buildAppSer
             : Problem(statusCode: appIdResult.GetStatusCodeInt(), detail: appIdResult.ErrorMessage);
     }
 
-    [HttpGet("applications/{userId:long}")]
-    [Authorize(Roles = "BuilderApplications.Read")]
+    [HttpPut("images/{imageLinkId:long}")]
+    [Authorize(Roles = "Applications.Write,Applications")]
     [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    [Produces(typeof(IEnumerable<ApplicationLatestStatus>))]
-    public async Task<IActionResult> GetApplicationsFromUser(long userId)
+    public async Task<IActionResult> UpdateApplicationImage(long imageLinkId, [FromBody] ApiApplicationImageModel updatedImageDetails)
     {
-        var appsResult = await buildAppService.GetApplicationsFromUser(userId);
-        return appsResult.IsSuccessful
-            ? Ok(appsResult.GetNonNullOrThrow())
-            : Problem(statusCode: appsResult.GetStatusCodeInt(), detail: appsResult.ErrorMessage);
+        var updateResult = await buildAppService.UpdateApplicationImage(imageLinkId, updatedImageDetails.ImageLink, updatedImageDetails.ImageType);
+        return updateResult.IsSuccessful
+            ? Ok()
+            : Problem(statusCode: updateResult.GetStatusCodeInt(), detail: updateResult.ErrorMessage);
     }
     
-    [HttpGet("application/{applicationId:long}")]
-    [Authorize(Roles = "BuilderApplications.Read")]
+    [HttpGet("{applicationId:long}")]
+    [Authorize(Roles = "Applications.Read,Applications")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [Produces(typeof(BuilderApplication))]
@@ -64,12 +62,12 @@ public class BuilderApplicationController(IBuilderApplicationService buildAppSer
             : Problem(statusCode: appResult.GetStatusCodeInt(), detail: appResult.ErrorMessage);
     }
     
-    [HttpPost("application/{applicationId:long}/status/add")]
-    [Authorize(Roles = "BuilderApplications.Write")]
+    [HttpPost("{applicationId:long}/status")]
+    [Authorize(Roles = "Applications.Write,Applications")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [Produces(typeof(bool))]
-    public async Task<IActionResult> AddApplicationStatus(long applicationId, [FromBody] BuilderApplicationAddStatusModel statusModel)
+    public async Task<IActionResult> AddApplicationStatus(long applicationId, [FromBody] ApiAddApplicationStatusModel statusModel)
     {
         var statusResult = await buildAppService.AddApplicationStatus(applicationId, statusModel.Status, statusModel.StatusMessage);
         return statusResult.IsSuccessful

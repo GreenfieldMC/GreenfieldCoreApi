@@ -101,6 +101,19 @@ public class ApplicationRepository(IUnitOfWork unitOfWork) : BaseRepository(unit
         }
     }
 
+    public async Task<Result<ApplicationImageLinkEntity>> UpdateImage(long imageLinkId, string linkType, string imageLink)
+    {
+        try
+        {
+            var imageRow = await Connection.QuerySingleProcedure(StoredProcs.BuildApps.UpdateImageLink, (imageLinkId, linkType, imageLink), Transaction);
+            return Result<ApplicationImageLinkEntity>.Success(imageRow);
+        }
+        catch (DbException ex)
+        {
+            return Result<ApplicationImageLinkEntity>.Failure($"Failed to update builder application image: {ex.Message}", HttpStatusCode.InternalServerError);
+        }
+    }
+
     public async Task<Result<ApplicationEntity>> SelectApplication(long applicationId)
     {
         try

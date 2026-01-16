@@ -5,9 +5,9 @@ namespace GreenfieldCoreServices.Models;
 /// </summary>
 /// <typeparam name="TFrom">The type of the database model.</typeparam>
 /// <typeparam name="TSelf">The type of the domain model.</typeparam>
-public interface IDbModelConvertable<in TFrom, out TSelf>
+public interface IModelConvertable<in TFrom, out TSelf>
 {
     
-    static abstract TSelf FromDbModel(TFrom from);
+    static abstract TSelf FromModel(TFrom from);
     
 }

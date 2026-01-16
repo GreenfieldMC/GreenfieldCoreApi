@@ -94,4 +94,11 @@ public interface IDiscordService
     /// <param name="discordConnectionId">Internal Discord connection ID.</param>
     /// <returns></returns>
     Task<Result<DiscordConnection>> GetDiscordConnection(long discordConnectionId);
+
+    /// <summary>
+    /// Retrieves all users linked to a specific Discord connection ID.
+    /// </summary>
+    /// <param name="discordConnectionId">Internal Discord connection ID.</param>
+    /// <returns></returns>
+    Task<Result<IEnumerable<UserDiscordConnection>>> GetUsersByDiscordConnectionId(long discordConnectionId);
 }

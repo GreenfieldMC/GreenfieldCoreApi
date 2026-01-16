@@ -15,7 +15,7 @@ public class CodeService(IUnitOfWork uow, ICacheService<long, BuildCode> cache) 
         var repo = uow.Repository<ICodeRepository>();
         var buildCodes = (await repo.SelectCodes()).GetNonNullOrThrow();
         
-        var result = buildCodes.Select(BuildCode.FromDbModel).ToList();
+        var result = buildCodes.Select(BuildCode.FromModel).ToList();
         
         foreach (var buildCode in result) 
             cache.SetValue(buildCode.CodeId, buildCode);
@@ -32,7 +32,7 @@ public class CodeService(IUnitOfWork uow, ICacheService<long, BuildCode> cache) 
         var buildCodeEntity = (await repo.SelectCode(buildCodeId)).GetOrThrow();
         if (buildCodeEntity is null) return Result<BuildCode>.Failure($"Build code id {buildCodeId} not found.", HttpStatusCode.NotFound);
         
-        var buildCode = BuildCode.FromDbModel(buildCodeEntity);
+        var buildCode = BuildCode.FromModel(buildCodeEntity);
         cache.SetValue(buildCode.CodeId, buildCode);
         return Result<BuildCode>.Success(buildCode);
     }
@@ -67,7 +67,7 @@ public class CodeService(IUnitOfWork uow, ICacheService<long, BuildCode> cache) 
         var created = (await repo.InsertCode(listOrder, buildCode)).GetNonNullOrThrow(nullDataMessage: "The build code could not be created.");
         uow.CompleteAndCommit();
         
-        var buildCodeModel = BuildCode.FromDbModel(created);
+        var buildCodeModel = BuildCode.FromModel(created);
         cache.SetValue(buildCodeModel.CodeId, buildCodeModel);
         return Result<BuildCode>.Success(buildCodeModel);
     }

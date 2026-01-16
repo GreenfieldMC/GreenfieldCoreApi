@@ -7,6 +7,7 @@ begin
         ail.ApplicationId,
         ail.LinkType,
         ail.ImageLink,
+        ail.UpdatedOn,
         ail.CreatedOn
     from `BuildApps.ImageLinks` ail
     where ail.ApplicationId = p_ApplicationId
