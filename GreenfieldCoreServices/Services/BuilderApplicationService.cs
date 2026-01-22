@@ -70,16 +70,16 @@ public class BuilderApplicationService(IUnitOfWork uow, ILogger<BuilderApplicati
         }
     }
 
-    public async Task<Result<bool>> AddApplicationStatus(long applicationId, string status, string? statusMessage)
+    public async Task<Result<BuildAppStatus>> AddApplicationStatus(long applicationId, string status, string? statusMessage)
     {
         var builderRepo = uow.Repository<IApplicationRepository>();
         uow.BeginTransaction();
 
         var statusResult = await builderRepo.InsertStatus(applicationId, status, statusMessage);
-        if (!statusResult.IsSuccessful)
+        if (!statusResult.TryGetDataNonNull(out var newStatus))
         {
             logger.LogWarning("Failed to insert builder application status {Status} for application {ApplicationId}. {Error}", status, applicationId, statusResult.ErrorMessage);
-            return Result<bool>.Failure(statusResult.ErrorMessage ?? "Failed to insert application status.", statusResult.StatusCode);
+            return Result<BuildAppStatus>.Failure(statusResult.ErrorMessage ?? "Failed to insert application status.", statusResult.StatusCode);
         }
 
         uow.CompleteAndCommit();
@@ -109,7 +109,7 @@ public class BuilderApplicationService(IUnitOfWork uow, ILogger<BuilderApplicati
                 logger.LogWarning("Failed to cache builder application {ApplicationId} after status update. {Error}", applicationId, cacheRefreshResult.ErrorMessage);
         }
 
-        return Result<bool>.Success(true);
+        return Result<BuildAppStatus>.Success(BuildAppStatus.FromModel(newStatus));
     }
 
     public async Task<Result> UpdateApplicationImage(long imageLinkId, string newImageLink, string newImageType)

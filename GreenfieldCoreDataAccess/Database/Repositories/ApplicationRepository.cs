@@ -67,7 +67,9 @@ public class ApplicationRepository(IUnitOfWork unitOfWork) : BaseRepository(unit
         try
         {
             var application = await Connection.QuerySingleProcedure(StoredProcs.BuildApps.InsertApplication, (userId, userAge, userNationality, additionalBuildingInformation, whyJoinGreenfield, additionalComments), Transaction);
-            return Result<ApplicationEntity>.Success(application);
+            return application is null 
+                ? Result<ApplicationEntity>.Failure("Failed to insert builder application: No application returned from database.", HttpStatusCode.InternalServerError)
+                : Result<ApplicationEntity>.Success(application);
         }
         catch (DbException ex)
         {
@@ -80,7 +82,9 @@ public class ApplicationRepository(IUnitOfWork unitOfWork) : BaseRepository(unit
         try
         {
             var statusRow = await Connection.QuerySingleProcedure(StoredProcs.BuildApps.InsertApplicationStatus, (applicationId, status, statusMessage), Transaction);
-            return Result<ApplicationStatusEntity>.Success(statusRow);
+            return statusRow is null
+                ? Result<ApplicationStatusEntity>.Failure("Failed to insert builder application status: No status returned from database.", HttpStatusCode.InternalServerError)
+                : Result<ApplicationStatusEntity>.Success(statusRow);
         }
         catch (DbException ex)
         {
@@ -93,7 +97,9 @@ public class ApplicationRepository(IUnitOfWork unitOfWork) : BaseRepository(unit
         try
         {
             var imageRow = await Connection.QuerySingleProcedure(StoredProcs.BuildApps.InsertImageLink, (applicationId, linkType, imageLink), Transaction);
-            return Result<ApplicationImageLinkEntity>.Success(imageRow);
+            return imageRow is null
+                ? Result<ApplicationImageLinkEntity>.Failure("Failed to insert builder application image: No image returned from database.", HttpStatusCode.InternalServerError)
+                : Result<ApplicationImageLinkEntity>.Success(imageRow);
         }
         catch (DbException ex)
         {
@@ -106,7 +112,9 @@ public class ApplicationRepository(IUnitOfWork unitOfWork) : BaseRepository(unit
         try
         {
             var imageRow = await Connection.QuerySingleProcedure(StoredProcs.BuildApps.UpdateImageLink, (imageLinkId, linkType, imageLink), Transaction);
-            return Result<ApplicationImageLinkEntity>.Success(imageRow);
+            return imageRow is null
+                ? Result<ApplicationImageLinkEntity>.Failure("Failed to update builder application image: No image returned from database.", HttpStatusCode.InternalServerError)
+                : Result<ApplicationImageLinkEntity>.Success(imageRow);
         }
         catch (DbException ex)
         {
@@ -119,7 +127,9 @@ public class ApplicationRepository(IUnitOfWork unitOfWork) : BaseRepository(unit
         try
         {
             var application = await Connection.QuerySingleProcedure(StoredProcs.BuildApps.SelectApplicationById, applicationId, Transaction);
-            return Result<ApplicationEntity>.Success(application);
+            return application is null
+                ? Result<ApplicationEntity>.Failure("Builder application not found.", HttpStatusCode.NotFound)
+                : Result<ApplicationEntity>.Success(application);
         }
         catch (DbException ex)
         {

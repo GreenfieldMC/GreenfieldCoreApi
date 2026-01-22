@@ -11,7 +11,7 @@ public interface IBuilderApplicationService
         string? nationality, List<(string Link, string ImageType)> images,
         string? additionalBuildingInformation, string whyJoinGreenfield, string? additionalComments);
 
-    Task<Result<bool>> AddApplicationStatus(long applicationId, string status, string? statusMessage);
+    Task<Result<BuildAppStatus>> AddApplicationStatus(long applicationId, string status, string? statusMessage);
     
     Task<Result> UpdateApplicationImage(long imageLinkId, string newImageLink, string newImageType);
     

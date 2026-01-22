@@ -66,7 +66,7 @@ public class ApplicationController(IBuilderApplicationService buildAppService) :
     [Authorize(Roles = "Applications.Write,Applications")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    [Produces(typeof(bool))]
+    [Produces(typeof(BuildAppStatus))]
     public async Task<IActionResult> AddApplicationStatus(long applicationId, [FromBody] ApiAddApplicationStatusModel statusModel)
     {
         var statusResult = await buildAppService.AddApplicationStatus(applicationId, statusModel.Status, statusModel.StatusMessage);
