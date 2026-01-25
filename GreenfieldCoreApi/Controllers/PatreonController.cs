@@ -33,11 +33,11 @@ public class PatreonController(IConfiguration configuration, IPatreonService pat
         if (!cacheService.TryGetValue(s => s.StateId == state, out var connectionState) || connectionState.Timestamp < DateTime.UtcNow.AddHours(-1))
         {
             cacheService.RemoveValues(s => s.StateId == state);
-            return ResourceHelpers.Redirect(RedirectType.Error, "./", "Your session state is invalid or has expired. Please retry linking your Patreon account again.");
+            return ResourceHelpers.Redirect(RedirectType.Error, "", "Your session state is invalid or has expired. Please retry linking your Patreon account again.");
         }
         
         if (string.IsNullOrEmpty(code))
-            return ResourceHelpers.Redirect(RedirectType.Error, "./", "Invalid code parameter. Please retry linking your Patreon account again.");
+            return ResourceHelpers.Redirect(RedirectType.Error, "", "Invalid code parameter. Please retry linking your Patreon account again.");
         
         var linkResult = await patreonApi.LinkPatreonAccountToUser(connectionState.UserId, code);
         
@@ -46,7 +46,7 @@ public class PatreonController(IConfiguration configuration, IPatreonService pat
         
         return linkResult.IsSuccessful
             ? ResourceHelpers.Redirect(RedirectType.Info, connectionState.RedirectUrl, "Your Patreon account has been successfully linked!")
-            : ResourceHelpers.Redirect(RedirectType.Error, "./", $"Failed to link your Patreon account: {linkResult.ErrorMessage}");
+            : ResourceHelpers.Redirect(RedirectType.Error, "", $"Failed to link your Patreon account: {linkResult.ErrorMessage}");
     }
     
     /// <summary>

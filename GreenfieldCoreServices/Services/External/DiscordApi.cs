@@ -1,3 +1,4 @@
+using System.Net;
 using System.Text.Json;
 using GreenfieldCoreDataAccess.Database.UnitOfWork;
 using GreenfieldCoreServices.Models.Connections.Discord;
@@ -5,10 +6,11 @@ using GreenfieldCoreServices.Models.Discord;
 using GreenfieldCoreServices.Services.External.Interfaces;
 using GreenfieldCoreServices.Services.Interfaces;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 
 namespace GreenfieldCoreServices.Services.External;
 
-public class DiscordApi(IConfiguration configuration, HttpClient client, IDiscordService discordService) : IDiscordApi
+public class DiscordApi(ILogger<IDiscordApi> logger, IConfiguration configuration, HttpClient client, IDiscordService discordService) : IDiscordApi
 {
     public async Task<Result<DiscordIdentityResponse>> GetDiscordIdentity(string accessToken)
     {
@@ -16,13 +18,25 @@ public class DiscordApi(IConfiguration configuration, HttpClient client, IDiscor
         request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", accessToken);
         var response = await client.SendAsync(request);
         if (!response.IsSuccessStatusCode)
+        {
+            logger.LogError("Failed to retrieve Discord identity. StatusCode: {StatusCode}, ReasonPhrase: {ReasonPhrase}", response.StatusCode, response.ReasonPhrase);
             return Result<DiscordIdentityResponse>.Failure($"Failed to retrieve Discord identity. {response.ReasonPhrase}", response.StatusCode);
+        }
 
         var content = await response.Content.ReadAsStringAsync();
-        var model = JsonSerializer.Deserialize<DiscordIdentityResponse>(content);
-        return model is null
-            ? Result<DiscordIdentityResponse>.Failure("Failed to deserialize Discord identity response.")
-            : Result<DiscordIdentityResponse>.Success(model);
+
+        try
+        {
+            var model = JsonSerializer.Deserialize<DiscordIdentityResponse>(content);
+            return model is null
+                ? Result<DiscordIdentityResponse>.Failure("Failed to deserialize Discord identity response.")
+                : Result<DiscordIdentityResponse>.Success(model);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Exception occurred while deserializing Discord identity response.");
+            return Result<DiscordIdentityResponse>.Failure($"Exception occurred while deserializing Discord identity response: {ex.Message}", HttpStatusCode.InternalServerError);
+        }
     }
 
     public async Task<Result<DiscordOAuthTokenResponse>> CreateDiscordAccessTokenAsync(string authorizationCode)
@@ -40,13 +54,25 @@ public class DiscordApi(IConfiguration configuration, HttpClient client, IDiscor
         
         var response = await client.SendAsync(request);
         if (!response.IsSuccessStatusCode)
-            return Result<DiscordOAuthTokenResponse>.Failure($"Failed to create Discord access token. {response.ReasonPhrase}", response.StatusCode);
+        {
+            logger.LogError("Failed to create Discord access token. StatusCode: {StatusCode}, ReasonPhrase: {ReasonPhrase}", response.StatusCode, response.ReasonPhrase);
+            return Result<DiscordOAuthTokenResponse>.Failure($"Failed to create Discord access token. {response.ReasonPhrase}", response.StatusCode);   
+        }
 
         var content = await response.Content.ReadAsStringAsync();
-        var model = JsonSerializer.Deserialize<DiscordOAuthTokenResponse>(content);
-        return model is null
-            ? Result<DiscordOAuthTokenResponse>.Failure("Failed to deserialize Discord access token response.")
-            : Result<DiscordOAuthTokenResponse>.Success(model);
+
+        try
+        {
+            var model = JsonSerializer.Deserialize<DiscordOAuthTokenResponse>(content);
+            return model is null
+                ? Result<DiscordOAuthTokenResponse>.Failure("Failed to deserialize Discord access token response.")
+                : Result<DiscordOAuthTokenResponse>.Success(model);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Exception occurred while deserializing Discord access token response.");
+            return Result<DiscordOAuthTokenResponse>.Failure($"Exception occurred while deserializing Discord access token response: {ex.Message}", HttpStatusCode.InternalServerError);
+        }
     }
 
     public async Task<Result<DiscordOAuthTokenResponse>> RefreshDiscordAccessTokenAsync(string refreshToken)
@@ -63,13 +89,25 @@ public class DiscordApi(IConfiguration configuration, HttpClient client, IDiscor
         
         var response = await client.SendAsync(request);
         if (!response.IsSuccessStatusCode)
+        {
+            logger.LogError("Failed to refresh Discord access token. StatusCode: {StatusCode}, ReasonPhrase: {ReasonPhrase}", response.StatusCode, response.ReasonPhrase);
             return Result<DiscordOAuthTokenResponse>.Failure($"Failed to refresh Discord access token. {response.ReasonPhrase}", response.StatusCode);
+        }
 
         var content = await response.Content.ReadAsStringAsync();
-        var model = JsonSerializer.Deserialize<DiscordOAuthTokenResponse>(content);
-        return model is null
-            ? Result<DiscordOAuthTokenResponse>.Failure("Failed to deserialize Discord access token response.")
-            : Result<DiscordOAuthTokenResponse>.Success(model);
+
+        try
+        {
+            var model = JsonSerializer.Deserialize<DiscordOAuthTokenResponse>(content);
+            return model is null
+                ? Result<DiscordOAuthTokenResponse>.Failure("Failed to deserialize Discord access token response.")
+                : Result<DiscordOAuthTokenResponse>.Success(model);   
+        } 
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Exception occurred while deserializing Discord access token response.");
+            return Result<DiscordOAuthTokenResponse>.Failure($"Exception occurred while deserializing Discord access token response: {ex.Message}", HttpStatusCode.InternalServerError);
+        }
     }
 
     public async Task<Result<UserDiscordConnection>> LinkDiscordAccountToUser(long userId, string code)
@@ -84,6 +122,22 @@ public class DiscordApi(IConfiguration configuration, HttpClient client, IDiscor
 
         if (!ulong.TryParse(identity.Id, out var discordSnowflake))
             return Result<UserDiscordConnection>.Failure("Failed to parse Discord user id.");
+        
+        var existingConnection = await discordService.GetDiscordConnectionBySnowflake(discordSnowflake);
+        if (existingConnection.TryGetDataNonNull(out var discordConnection))
+        {
+            var updateExistingResult = await discordService.UpdateDiscordConnectionTokens(discordConnection.DiscordConnectionId, tokenData.RefreshToken, tokenData.AccessToken, tokenData.TokenType, DateTime.Now.AddSeconds(tokenData.ExpiresIn), tokenData.Scope);
+            if (!updateExistingResult.IsSuccessful)
+            {
+                logger.LogError("Failed to update existing Discord connection tokens for DiscordConnectionId {DiscordConnectionId}: {ErrorMessage}", discordConnection.DiscordConnectionId, updateExistingResult.ErrorMessage);
+                return Result<UserDiscordConnection>.Failure(updateExistingResult.ErrorMessage!, updateExistingResult.StatusCode);
+            }
+            
+            var existingLinkResult = await discordService.LinkUserToDiscordConnection(userId, discordConnection.DiscordConnectionId);
+            return !existingLinkResult.TryGetDataNonNull(out var existingUser)
+                ? Result<UserDiscordConnection>.Failure(existingLinkResult.ErrorMessage!, existingLinkResult.StatusCode)
+                : Result<UserDiscordConnection>.Success(existingUser);
+        }
 
         var createConnection = await discordService.CreateDiscordConnection(tokenData.RefreshToken, tokenData.AccessToken, tokenData.TokenType, DateTime.Now.AddSeconds(tokenData.ExpiresIn), tokenData.Scope, discordSnowflake, identity.GlobalName ?? identity.Username);
         if (!createConnection.TryGetDataNonNull(out var connection))

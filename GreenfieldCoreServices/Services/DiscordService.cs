@@ -3,10 +3,13 @@ using GreenfieldCoreDataAccess.Database.Repositories.Interfaces;
 using GreenfieldCoreDataAccess.Database.UnitOfWork;
 using GreenfieldCoreServices.Models.Connections.Discord;
 using GreenfieldCoreServices.Services.Interfaces;
+using Microsoft.Extensions.Logging;
 
 namespace GreenfieldCoreServices.Services;
 
-public class DiscordService(IUnitOfWork uow, 
+public class DiscordService(
+    IUnitOfWork uow, 
+    ILogger<IDiscordService> logger,
     ICacheService<long, DiscordConnection> discordConnectionCache, 
     ICacheService<(long userId, long discordConnectionId), UserDiscordConnection> userDiscordConnectionCache) : IDiscordService
 {

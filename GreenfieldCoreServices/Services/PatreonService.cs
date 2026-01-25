@@ -3,10 +3,12 @@ using GreenfieldCoreDataAccess.Database.Repositories.Interfaces;
 using GreenfieldCoreDataAccess.Database.UnitOfWork;
 using GreenfieldCoreServices.Models.Connections.Patreon;
 using GreenfieldCoreServices.Services.Interfaces;
+using Microsoft.Extensions.Logging;
 
 namespace GreenfieldCoreServices.Services;
 
 public class PatreonService(IUnitOfWork uow, 
+    ILogger<IPatreonService> logger,
     ICacheService<long, PatreonConnection> patreonConnectionCache, 
     ICacheService<(long userId, long patreonConnectionId), UserPatreonConnection> userPatreonConnectionCache) : IPatreonService
 {

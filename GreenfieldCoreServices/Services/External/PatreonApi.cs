@@ -1,3 +1,4 @@
+using System.Net;
 using System.Text.Json;
 using GreenfieldCoreDataAccess.Database.UnitOfWork;
 using GreenfieldCoreServices.Models.Connections.Patreon;
@@ -5,10 +6,11 @@ using GreenfieldCoreServices.Models.Patreon;
 using GreenfieldCoreServices.Services.External.Interfaces;
 using GreenfieldCoreServices.Services.Interfaces;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 
 namespace GreenfieldCoreServices.Services.External;
 
-public class PatreonApi(IConfiguration configuration, HttpClient client, IPatreonService patreonService) : IPatreonApi
+public class PatreonApi(ILogger<IPatreonApi> logger, IConfiguration configuration, HttpClient client, IPatreonService patreonService) : IPatreonApi
 {
     private static string _cachedCampaignId = "";
 
@@ -20,14 +22,25 @@ public class PatreonApi(IConfiguration configuration, HttpClient client, IPatreo
         var response = await client.SendAsync(request);
         
         if (!response.IsSuccessStatusCode)
+        {
+            logger.LogError("Failed to retrieve Patreon identity. StatusCode: {StatusCode}, ReasonPhrase: {ReasonPhrase}", response.StatusCode, response.ReasonPhrase);
             return Result<PatreonUserIdentityModel>.Failure($"Failed to retrieve Patreon identity. {response.ReasonPhrase}", response.StatusCode);
+        }
             
         var content = await response.Content.ReadAsStringAsync();
-        var model = JsonSerializer.Deserialize<PatreonUserIdentityModel>(content);
         
-        return model is null 
-            ? Result<PatreonUserIdentityModel>.Failure("Failed to deserialize Patreon identity response.") 
-            : Result<PatreonUserIdentityModel>.Success(model);
+        try
+        {
+            var model = JsonSerializer.Deserialize<PatreonUserIdentityModel>(content);
+            return model is null 
+                ? Result<PatreonUserIdentityModel>.Failure("Failed to deserialize Patreon identity response.") 
+                : Result<PatreonUserIdentityModel>.Success(model);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Exception occurred while deserializing Patreon identity response.");
+            return Result<PatreonUserIdentityModel>.Failure($"Exception occurred while deserializing Patreon identity response: {ex.Message}", HttpStatusCode.InternalServerError);
+        }
     }
 
     public async Task<Result<PatreonOAuthTokenResponse>> CreatePatreonAccessTokenAsync(string authorizationCode)
@@ -46,14 +59,25 @@ public class PatreonApi(IConfiguration configuration, HttpClient client, IPatreo
         
         var response = await client.SendAsync(request);
         if (!response.IsSuccessStatusCode)
+        {
+            logger.LogError("Failed to create Patreon access token. StatusCode: {StatusCode}, ReasonPhrase: {ReasonPhrase}", response.StatusCode, response.ReasonPhrase);
             return Result<PatreonOAuthTokenResponse>.Failure($"Failed to create Patreon access token. {response.ReasonPhrase}", response.StatusCode);
+        }
 
         var content = await response.Content.ReadAsStringAsync();
-        var model = JsonSerializer.Deserialize<PatreonOAuthTokenResponse>(content);
-
-        return model is null
-            ? Result<PatreonOAuthTokenResponse>.Failure("Failed to deserialize Patreon access token response.")
-            : Result<PatreonOAuthTokenResponse>.Success(model);
+        
+        try
+        {
+            var model = JsonSerializer.Deserialize<PatreonOAuthTokenResponse>(content);
+            return model is null
+                ? Result<PatreonOAuthTokenResponse>.Failure("Failed to deserialize Patreon access token response.")
+                : Result<PatreonOAuthTokenResponse>.Success(model);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Exception occurred while deserializing Patreon access token response.");
+            return Result<PatreonOAuthTokenResponse>.Failure($"Exception occurred while deserializing Patreon access token response: {ex.Message}", HttpStatusCode.InternalServerError);
+        }
     }
 
     public async Task<Result<PatreonOAuthTokenResponse>> RefreshPatreonAccessTokenAsync(string refreshToken)
@@ -72,14 +96,25 @@ public class PatreonApi(IConfiguration configuration, HttpClient client, IPatreo
 
         var response = await client.SendAsync(request);
         if (!response.IsSuccessStatusCode)
+        {
+            logger.LogError("Failed to refresh Patreon access token. StatusCode: {StatusCode}, ReasonPhrase: {ReasonPhrase}", response.StatusCode, response.ReasonPhrase);
             return Result<PatreonOAuthTokenResponse>.Failure($"Failed to refresh Patreon access token. {response.ReasonPhrase}", response.StatusCode);
+        }
 
         var content = await response.Content.ReadAsStringAsync();
-        var model = JsonSerializer.Deserialize<PatreonOAuthTokenResponse>(content);
-
-        return model is null
-            ? Result<PatreonOAuthTokenResponse>.Failure("Failed to deserialize Patreon access token response.")
-            : Result<PatreonOAuthTokenResponse>.Success(model);
+        
+        try
+        {
+            var model = JsonSerializer.Deserialize<PatreonOAuthTokenResponse>(content);
+            return model is null
+                ? Result<PatreonOAuthTokenResponse>.Failure("Failed to deserialize Patreon access token response.")
+                : Result<PatreonOAuthTokenResponse>.Success(model);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Exception occurred while deserializing Patreon access token response.");
+            return Result<PatreonOAuthTokenResponse>.Failure($"Exception occurred while deserializing Patreon access token response: {ex.Message}", HttpStatusCode.InternalServerError);
+        }
     }
 
     public async Task<Result<UserPatreonConnection>> LinkPatreonAccountToUser(long userId, string code)
@@ -97,6 +132,22 @@ public class PatreonApi(IConfiguration configuration, HttpClient client, IPatreo
         if (!long.TryParse(identityData.Data.Id, out var patreonId))
             return Result<UserPatreonConnection>.Failure("Failed to parse Patreon ID.");
 
+        var existingConnection = await patreonService.GetPatreonConnection(patreonId);
+        if (existingConnection.TryGetDataNonNull(out var patreonConnection))
+        {
+            var updateExistingResult = await patreonService.UpdatePatreonConnectionTokens(patreonConnection.PatreonConnectionId, tokenData.RefreshToken, tokenData.AccessToken, tokenData.TokenType, DateTime.Now.AddSeconds(tokenData.ExpiresIn), tokenData.Scope);
+            if (!updateExistingResult.IsSuccessful)
+            {
+                logger.LogError("Failed to update existing Patreon connection tokens for Patreon ID {PatreonId}: {ErrorMessage}", patreonId, updateExistingResult.ErrorMessage);
+                return Result<UserPatreonConnection>.Failure(updateExistingResult.ErrorMessage!, updateExistingResult.StatusCode);
+            }
+            
+            var existingLinkResult = await patreonService.LinkUserToPatreonConnection(userId, patreonConnection.PatreonConnectionId);
+            return !existingLinkResult.TryGetDataNonNull(out var linkedPatreonAccount)
+                ? Result<UserPatreonConnection>.Failure(existingLinkResult.ErrorMessage!, existingLinkResult.StatusCode)
+                : Result<UserPatreonConnection>.Success(linkedPatreonAccount);
+        }
+        
         var campaignIdResult = await campaignIdTask;
         if (!campaignIdResult.TryGetDataNonNull(out var campaignId))
             return Result<UserPatreonConnection>.Failure(campaignIdResult.ErrorMessage!, campaignIdResult.StatusCode);
@@ -105,10 +156,10 @@ public class PatreonApi(IConfiguration configuration, HttpClient client, IPatreo
         var fullName = identityData.Data.Attributes?.FullName ?? "Unknown Patreon User";
 
         var createConnectionResult = await patreonService.CreatePatreonConnection(tokenData.RefreshToken, tokenData.AccessToken, tokenData.TokenType, DateTime.Now.AddSeconds(tokenData.ExpiresIn), tokenData.Scope, patreonId, fullName, pledge);
-        if (!createConnectionResult.TryGetDataNonNull(out var patreonConnection))
+        if (!createConnectionResult.TryGetDataNonNull(out var connection))
             return Result<UserPatreonConnection>.Failure(createConnectionResult.ErrorMessage!, createConnectionResult.StatusCode);
 
-        var linkResult = await patreonService.LinkUserToPatreonConnection(userId, patreonConnection.PatreonConnectionId);
+        var linkResult = await patreonService.LinkUserToPatreonConnection(userId, connection.PatreonConnectionId);
         
         return !linkResult.TryGetDataNonNull(out var userPatreonAccount) 
             ? Result<UserPatreonConnection>.Failure(linkResult.ErrorMessage!, linkResult.StatusCode) 
