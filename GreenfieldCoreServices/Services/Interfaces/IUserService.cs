@@ -36,34 +36,4 @@ public interface IUserService
     /// <returns>The updated User if an update was performed; a failed Result otherwise.</returns>
     public Task<Result<User>> UpdateUsername(Guid minecraftUuid, string newUsername);
     
-    /// <summary>
-    /// Links a Discord account to a user.
-    /// </summary>
-    /// <param name="userId">The internal user ID</param>
-    /// <param name="discordSnowflake">The Discord snowflake ID</param>
-    /// <returns>True if the link was created; a failed Result otherwise.</returns>
-    public Task<Result<bool>> LinkDiscordAccount(long userId, ulong discordSnowflake);
-    
-    /// <summary>
-    /// Unlinks a Discord account from a user.
-    /// </summary>
-    /// <param name="userId">The internal user ID</param>
-    /// <param name="discordSnowflake">>The Discord snowflake ID</param>
-    /// <returns>>True if the link was removed; a failed Result otherwise.</returns>
-    public Task<Result<bool>> UnlinkDiscordAccount(long userId, ulong discordSnowflake);
-    
-    /// <summary>
-    /// Gets all linked Discord accounts for a given user.
-    /// </summary>
-    /// <param name="userId">The internal user ID</param>
-    /// <returns>The list of linked Discord snowflake IDs (or an empty list of no accounts are linked). A failed Result otherwise.</returns>
-    public Task<Result<IEnumerable<ulong>>> GetLinkedDiscordAccounts(long userId);
-    
-    /// <summary>
-    /// Gets all linked Discord accounts for a given Minecraft UUID.
-    /// </summary>
-    /// <param name="minecraftUuid">The Minecraft UUID</param>
-    /// <returns>>The list of linked Discord snowflake IDs (or an empty list of no accounts are linked). A failed Result otherwise.</returns>
-    public Task<Result<IEnumerable<ulong>>> GetLinkedDiscordAccountsByUuid(Guid minecraftUuid);
-    
 }

@@ -8,6 +8,15 @@
 appsettings.Development.json
 appsettings.UAT.json
 appsettings.Production.json
+connectionstrings.Development.json
+connectionstrings.UAT.json
+connectionstrings.Production.json
+jwtsettings.Development.json
+jwtsettings.UAT.json
+jwtsettings.Production.json
+services.Development.json
+services.UAT.json
+services.Production.json
 
 # User-specific files
 *.rsuser

@@ -7,12 +7,20 @@ using GreenfieldCoreDataAccess.Database.Repositories.Interfaces;
 using GreenfieldCoreDataAccess.Database.ScriptManager;
 using GreenfieldCoreDataAccess.Database.UnitOfWork;
 using GreenfieldCoreServices.Commands;
+using GreenfieldCoreServices.Models.BuildApps;
 using GreenfieldCoreServices.Models.BuildCodes;
 using GreenfieldCoreServices.Models.Clients;
+using GreenfieldCoreServices.Models.Connections.Discord;
+using GreenfieldCoreServices.Models.Connections.Patreon;
+using GreenfieldCoreServices.Models.Discord;
+using GreenfieldCoreServices.Models.Patreon;
 using GreenfieldCoreServices.Models.Users;
 using GreenfieldCoreServices.Services;
 using GreenfieldCoreServices.Services.Caching;
+using GreenfieldCoreServices.Services.External;
+using GreenfieldCoreServices.Services.External.Interfaces;
 using GreenfieldCoreServices.Services.Interfaces;
+using GreenfieldCoreServices.Services.Tasks;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Diagnostics;
@@ -32,8 +40,6 @@ public static class Startup
     {
         Log.Logger = new LoggerConfiguration()
             .Enrich.FromLogContext()
-            // .WriteTo.Console()
-            // .WriteTo.Debug()
             .ReadFrom.Configuration(builder.Configuration)
             .CreateLogger();
         
@@ -54,15 +60,31 @@ public static class Startup
         services.AddTransient<IScriptManager, ScriptManager>();
         services.AddTransient<IClientRepository, ClientRepository>();
         services.AddTransient<IUserRepository, UserRepository>();
-        services.AddTransient<IBuildCodeRepository, BuildCodeRepository>();
+        services.AddTransient<IPatreonConnectionRepository, PatreonConnectionRepository>();
+        services.AddTransient<IDiscordConnectionRepository, DiscordConnectionRepository>();
+        services.AddTransient<ICodeRepository, CodeRepository>();
+        services.AddTransient<IApplicationRepository, ApplicationRepository>();
+    }
+    
+    internal static void ConfigureScheduledTasks(this IServiceCollection services)
+    {
+        services.AddHostedService<PatreonTokenRefreshTask>();
+        services.AddHostedService<DiscordTokenRefreshTask>();
     }
     
     internal static void ConfigureServices(this IServiceCollection services)
     {
         services.AddLogging(builder => builder.AddConsole());
         services.AddTransient<IUserService, UserService>();
+        services.AddTransient<IPatreonService, PatreonService>();
+        services.AddTransient<IDiscordService, DiscordService>();
         services.AddTransient<IClientAuthService, ClientAuthService>();
-        services.AddTransient<IBuildCodeService, BuildCodeService>();
+        services.AddTransient<ICodeService, CodeService>();
+        services.AddTransient<IBuilderApplicationService, BuilderApplicationService>();
+        services.AddHttpClient<IPatreonApi, PatreonApi>(client => { client.BaseAddress = new Uri("https://www.patreon.com/api/oauth2/"); });
+        services.AddHttpClient<IDiscordApi, DiscordApi>(client => { client.BaseAddress = new Uri("https://discord.com"); });
+
+        services.AddSingleton<TaskStartSignalService>();
     }
 
     internal static void ConfigureCaching(this IServiceCollection services)
@@ -70,7 +92,15 @@ public static class Startup
         services.AddSingleton<ICacheService<Guid, Client>, ClientCacheService>();
         services.AddSingleton<ICacheService<long, BuildCode>, BuildCodeCacheService>();
         services.AddSingleton<ICacheService<long, User>, UserCacheService>();
-        services.AddSingleton<ICacheService<long, List<ulong>>, UserDiscordCacheService>();
+        services.AddSingleton<ICacheService<long, PatreonConnection>, PatreonConnectionCacheService>();
+        services.AddSingleton<ICacheService<(long, long), UserPatreonConnection>, UserPatreonConnectionCacheService>();
+        services.AddSingleton<ICacheService<long, DiscordConnection>, DiscordConnectionCacheService>();
+        services.AddSingleton<ICacheService<(long, long), UserDiscordConnection>, UserDiscordConnectionCacheService>();
+        services.AddSingleton<ICacheService<long, BuilderApplication>, BuildAppCacheService>();
+        services.AddSingleton<ICacheService<long, PatreonConnectionState>, PatreonConnectionStateCache>();
+        services.AddSingleton<ICacheService<(long userId, long patreonConnectionId), PatreonDisconnectState>, PatreonDisconnectStateCache>();
+        services.AddSingleton<ICacheService<long, DiscordConnectionState>, DiscordConnectionStateCache>();
+        services.AddSingleton<ICacheService<(long userId, long discordConnectionId), DiscordDisconnectState>, DiscordDisconnectStateCache>();
     }
 
     internal static void ConfigureConfiguration(this IConfigurationBuilder configBuilder, IWebHostEnvironment env)
@@ -80,6 +110,7 @@ public static class Startup
             .AddJsonFile($"appsettings.{env.EnvironmentName}.json", optional: true)
             .AddJsonFile($"connectionstrings.{env.EnvironmentName}.json", optional: false)
             .AddJsonFile($"jwtsettings.{env.EnvironmentName}.json", optional: false)
+            .AddJsonFile($"services.{env.EnvironmentName}.json", optional: false)
             .AddEnvironmentVariables();
     }
     
