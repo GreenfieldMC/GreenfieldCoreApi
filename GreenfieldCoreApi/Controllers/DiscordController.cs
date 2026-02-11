@@ -40,7 +40,7 @@ public class DiscordController(IConfiguration configuration, IDiscordService dis
             cacheService.RemoveValues(s => s.StateId == state);
 
         return linkResult.IsSuccessful
-            ? ResourceHelpers.Redirect(RedirectType.Info, connectionState.RedirectUrl, "Your Discord account has been successfully linked!")
+            ? ResourceHelpers.Redirect(RedirectType.Info, connectionState.RedirectUrl, "Your Discord account has been successfully linked!", "You may close this tab.")
             : ResourceHelpers.Redirect(RedirectType.Error, "", $"Failed to link your Discord account: {linkResult.ErrorMessage}");
     }
 
@@ -65,7 +65,7 @@ public class DiscordController(IConfiguration configuration, IDiscordService dis
             disconnectCacheService.RemoveValues(s => s.StateId == state);
 
         return unlinkResult.IsSuccessful
-            ? ResourceHelpers.Redirect(RedirectType.Info, disconnectState.RedirectUrl, "Your Discord account has been successfully unlinked!")
+            ? ResourceHelpers.Redirect(RedirectType.Info, disconnectState.RedirectUrl, "Your Discord account has been successfully unlinked!", "You may close this tab.")
             : ResourceHelpers.Redirect(RedirectType.Error, "./", $"Failed to unlink your Discord account: {unlinkResult.ErrorMessage}");
     }
     

@@ -5,13 +5,14 @@ namespace GreenfieldCoreApi.Extensions;
 public class ResourceHelpers
 {
 
-    public static ContentResult Redirect(RedirectType type, string redirectUrl, string message)
+    public static ContentResult Redirect(RedirectType type, string redirectUrl, string message, string? submessage = null)
     {
         var htmlPath = Path.Combine(Directory.GetCurrentDirectory(), "Resources", "Redirect.html");
         var htmlContent = File.ReadAllText(htmlPath);
         htmlContent = htmlContent.Replace("{{REDIRECT_URL}}", redirectUrl);
         htmlContent = htmlContent.Replace("{{MESSAGE}}", message);
         htmlContent = htmlContent.Replace("{{BODYSTYLE}}", type.ToString().ToLower());
+        htmlContent = htmlContent.Replace("{{SUBMESSAGE}}", submessage ?? string.Empty);
         
         return new ContentResult
         {

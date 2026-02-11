@@ -45,7 +45,7 @@ public class PatreonController(IConfiguration configuration, IPatreonService pat
             cacheService.RemoveValues(s => s.StateId == state);
         
         return linkResult.IsSuccessful
-            ? ResourceHelpers.Redirect(RedirectType.Info, connectionState.RedirectUrl, "Your Patreon account has been successfully linked!")
+            ? ResourceHelpers.Redirect(RedirectType.Info, connectionState.RedirectUrl, "Your Patreon account has been successfully linked!", "You may close this tab.")
             : ResourceHelpers.Redirect(RedirectType.Error, "", $"Failed to link your Patreon account: {linkResult.ErrorMessage}");
     }
     
@@ -70,7 +70,7 @@ public class PatreonController(IConfiguration configuration, IPatreonService pat
             disconnectStateCache.RemoveValues(s => s.StateId == state);
 
         return unlinkResult.IsSuccessful
-            ? ResourceHelpers.Redirect(RedirectType.Info, disconnectState.RedirectUrl, "Your Patreon account has been successfully unlinked!")
+            ? ResourceHelpers.Redirect(RedirectType.Info, disconnectState.RedirectUrl, "Your Patreon account has been successfully unlinked!", "You may close this tab.")
             : ResourceHelpers.Redirect(RedirectType.Error, "./", $"Failed to unlink your Patreon account: {unlinkResult.ErrorMessage}");
     }
     
