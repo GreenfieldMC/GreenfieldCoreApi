@@ -32,7 +32,10 @@ public class DiscordController(IConfiguration configuration, IDiscordService dis
         }
 
         if (string.IsNullOrEmpty(code))
+        {
+            cacheService.RemoveValues(s => s.StateId == state);
             return ResourceHelpers.Redirect(RedirectType.Error, "", "Invalid code parameter. Please retry linking your Discord account again.");
+        }
 
         var linkResult = await discordApi.LinkDiscordAccountToUser(connectionState.UserId, code);
         
