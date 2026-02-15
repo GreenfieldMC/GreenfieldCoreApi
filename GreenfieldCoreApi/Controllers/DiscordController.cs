@@ -28,13 +28,13 @@ public class DiscordController(IConfiguration configuration, IDiscordService dis
         if (!cacheService.TryGetValue(s => s.StateId == state, out var connectionState) || connectionState.Timestamp < DateTime.UtcNow.AddHours(-1))
         {
             cacheService.RemoveValues(s => s.StateId == state);
-            return ResourceHelpers.Redirect(RedirectType.Error, "", "Your session state is invalid or has expired. Please retry linking your Discord account again.");
+            return ResourceHelpers.Redirect(RedirectType.Error, null, "Your session state is invalid or has expired. Please retry linking your Discord account again.");
         }
 
         if (string.IsNullOrEmpty(code))
         {
             cacheService.RemoveValues(s => s.StateId == state);
-            return ResourceHelpers.Redirect(RedirectType.Error, "", "Invalid code parameter. Please retry linking your Discord account again.");
+            return ResourceHelpers.Redirect(RedirectType.Error, null, "Invalid code parameter. Please retry linking your Discord account again.");
         }
 
         var linkResult = await discordApi.LinkDiscordAccountToUser(connectionState.UserId, code);
@@ -44,7 +44,7 @@ public class DiscordController(IConfiguration configuration, IDiscordService dis
 
         return linkResult.IsSuccessful
             ? ResourceHelpers.Redirect(RedirectType.Info, connectionState.RedirectUrl, "Your Discord account has been successfully linked!", "You may close this tab.")
-            : ResourceHelpers.Redirect(RedirectType.Error, "", $"Failed to link your Discord account: {linkResult.ErrorMessage}");
+            : ResourceHelpers.Redirect(RedirectType.Error, null, $"Failed to link your Discord account: {linkResult.ErrorMessage}");
     }
 
     /// <summary>
@@ -59,7 +59,7 @@ public class DiscordController(IConfiguration configuration, IDiscordService dis
         if (!disconnectCacheService.TryGetValue(s => s.StateId == state, out var disconnectState) || disconnectState.Timestamp < DateTime.UtcNow.AddHours(-1))
         {
             disconnectCacheService.RemoveValues(s => s.StateId == state);
-            return ResourceHelpers.Redirect(RedirectType.Error, "./", "Your session state is invalid or has expired. Please retry unlinking your Discord account again.");
+            return ResourceHelpers.Redirect(RedirectType.Error, null, "Your session state is invalid or has expired. Please retry unlinking your Discord account again.");
         }
 
         var unlinkResult = await discordService.UnlinkUserDiscordConnection(disconnectState.UserId, disconnectState.DiscordConnectionId);
@@ -69,7 +69,7 @@ public class DiscordController(IConfiguration configuration, IDiscordService dis
 
         return unlinkResult.IsSuccessful
             ? ResourceHelpers.Redirect(RedirectType.Info, disconnectState.RedirectUrl, "Your Discord account has been successfully unlinked!", "You may close this tab.")
-            : ResourceHelpers.Redirect(RedirectType.Error, "./", $"Failed to unlink your Discord account: {unlinkResult.ErrorMessage}");
+            : ResourceHelpers.Redirect(RedirectType.Error, null, $"Failed to unlink your Discord account: {unlinkResult.ErrorMessage}");
     }
     
     /// <summary>
