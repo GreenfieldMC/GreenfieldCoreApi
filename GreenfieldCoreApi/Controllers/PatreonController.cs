@@ -33,13 +33,13 @@ public class PatreonController(IConfiguration configuration, IPatreonService pat
         if (!cacheService.TryGetValue(s => s.StateId == state, out var connectionState) || connectionState.Timestamp < DateTime.UtcNow.AddHours(-1))
         {
             cacheService.RemoveValues(s => s.StateId == state);
-            return ResourceHelpers.Redirect(RedirectType.Error, "", "Your session state is invalid or has expired. Please retry linking your Patreon account again.");
+            return ResourceHelpers.Redirect(RedirectType.Error, null, "Your session state is invalid or has expired. Please retry linking your Patreon account again.");
         }
 
         if (string.IsNullOrEmpty(code))
         {
             cacheService.RemoveValues(s => s.StateId == state);
-            return ResourceHelpers.Redirect(RedirectType.Error, "", "Invalid code parameter. Please retry linking your Patreon account again.");   
+            return ResourceHelpers.Redirect(RedirectType.Error, null, "Invalid code parameter. Please retry linking your Patreon account again.");   
         }
         
         var linkResult = await patreonApi.LinkPatreonAccountToUser(connectionState.UserId, code);
@@ -49,7 +49,7 @@ public class PatreonController(IConfiguration configuration, IPatreonService pat
         
         return linkResult.IsSuccessful
             ? ResourceHelpers.Redirect(RedirectType.Info, connectionState.RedirectUrl, "Your Patreon account has been successfully linked!", "You may close this tab.")
-            : ResourceHelpers.Redirect(RedirectType.Error, "", $"Failed to link your Patreon account: {linkResult.ErrorMessage}");
+            : ResourceHelpers.Redirect(RedirectType.Error, null, $"Failed to link your Patreon account: {linkResult.ErrorMessage}");
     }
     
     /// <summary>
@@ -64,7 +64,7 @@ public class PatreonController(IConfiguration configuration, IPatreonService pat
         if (!disconnectStateCache.TryGetValue(s => s.StateId == state, out var disconnectState) || disconnectState.Timestamp < DateTime.UtcNow.AddHours(-1))
         {
             disconnectStateCache.RemoveValues(s => s.StateId == state);
-            return ResourceHelpers.Redirect(RedirectType.Error, "./", "Your session state is invalid or has expired. Please retry unlinking your Patreon account again.");
+            return ResourceHelpers.Redirect(RedirectType.Error, null, "Your session state is invalid or has expired. Please retry unlinking your Patreon account again.");
         }
 
         var unlinkResult = await patreonService.UnlinkUserPatreonConnection(disconnectState.UserId, disconnectState.PatreonConnectionId);
@@ -74,7 +74,7 @@ public class PatreonController(IConfiguration configuration, IPatreonService pat
 
         return unlinkResult.IsSuccessful
             ? ResourceHelpers.Redirect(RedirectType.Info, disconnectState.RedirectUrl, "Your Patreon account has been successfully unlinked!", "You may close this tab.")
-            : ResourceHelpers.Redirect(RedirectType.Error, "./", $"Failed to unlink your Patreon account: {unlinkResult.ErrorMessage}");
+            : ResourceHelpers.Redirect(RedirectType.Error, null, $"Failed to unlink your Patreon account: {unlinkResult.ErrorMessage}");
     }
     
     /// <summary>
