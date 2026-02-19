@@ -3,10 +3,11 @@ using GreenfieldCoreDataAccess.Database.Models;
 using GreenfieldCoreDataAccess.Database.Procedures;
 using GreenfieldCoreDataAccess.Database.Repositories.Interfaces;
 using GreenfieldCoreDataAccess.Database.UnitOfWork;
+using Microsoft.Extensions.Logging;
 
 namespace GreenfieldCoreDataAccess.Database.Repositories;
 
-public class CodeRepository(IUnitOfWork uow) : BaseRepository(uow), ICodeRepository
+public class CodeRepository(IUnitOfWork uow, ILogger<ICodeRepository> logger) : BaseRepository(uow), ICodeRepository
 {
     
     public async Task<Result<BuildCodeEntity?>> InsertCode(int listOrder, string buildCode)
@@ -18,6 +19,7 @@ public class CodeRepository(IUnitOfWork uow) : BaseRepository(uow), ICodeReposit
         }
         catch (DbException ex)
         {
+            logger.LogDebug("{ErrorMessage}", ex.Message);
             return Result<BuildCodeEntity?>.Failure($"Failed to create build code: {ex.Message}");
         }
     }
@@ -31,6 +33,7 @@ public class CodeRepository(IUnitOfWork uow) : BaseRepository(uow), ICodeReposit
         }
         catch (DbException ex)
         {
+            logger.LogDebug("{ErrorMessage}", ex.Message);
             return Result<BuildCodeEntity?>.Failure($"Failed to get build code by ID: {ex.Message}");
         }
     }
@@ -44,6 +47,7 @@ public class CodeRepository(IUnitOfWork uow) : BaseRepository(uow), ICodeReposit
         }
         catch (DbException ex)
         {
+            logger.LogDebug("{ErrorMessage}", ex.Message);
             return Result<IEnumerable<BuildCodeEntity>>.Failure($"Failed to get build codes: {ex.Message}");
         }
     }
@@ -59,6 +63,7 @@ public class CodeRepository(IUnitOfWork uow) : BaseRepository(uow), ICodeReposit
         }
         catch (DbException ex)
         {
+            logger.LogDebug("{ErrorMessage}", ex.Message);
             return Result.Failure($"Failed to delete build code: {ex.Message}");
         }
     }
@@ -74,6 +79,7 @@ public class CodeRepository(IUnitOfWork uow) : BaseRepository(uow), ICodeReposit
         }
         catch (DbException ex)
         {
+            logger.LogDebug("{ErrorMessage}", ex.Message);
             return Result.Failure($"Failed to update build code: {ex.Message}");
         }
     }

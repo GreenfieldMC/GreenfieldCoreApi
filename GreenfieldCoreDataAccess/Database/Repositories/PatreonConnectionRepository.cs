@@ -3,10 +3,11 @@ using GreenfieldCoreDataAccess.Database.Models;
 using GreenfieldCoreDataAccess.Database.Procedures;
 using GreenfieldCoreDataAccess.Database.Repositories.Interfaces;
 using GreenfieldCoreDataAccess.Database.UnitOfWork;
+using Microsoft.Extensions.Logging;
 
 namespace GreenfieldCoreDataAccess.Database.Repositories;
 
-public class PatreonConnectionRepository(IUnitOfWork uow) : BaseRepository(uow), IPatreonConnectionRepository
+public class PatreonConnectionRepository(IUnitOfWork uow, ILogger<IPatreonConnectionRepository> logger) : BaseRepository(uow), IPatreonConnectionRepository
 {
     public async Task<Result<PatreonConnectionEntity>> InsertConnection(string refreshToken, string accessToken, string tokenType, DateTime tokenExpiry, string scope, long patreonId, string fullName, decimal? pledge)
     {
@@ -19,6 +20,7 @@ public class PatreonConnectionRepository(IUnitOfWork uow) : BaseRepository(uow),
         }
         catch (DbException ex)
         {
+            logger.LogDebug("{ErrorMessage}", ex.Message);
             return Result<PatreonConnectionEntity>.Failure($"Failed to insert Patreon connection: {ex.Message}");
         }
     }
@@ -34,6 +36,7 @@ public class PatreonConnectionRepository(IUnitOfWork uow) : BaseRepository(uow),
         }
         catch (DbException ex)
         {
+            logger.LogDebug("{ErrorMessage}", ex.Message);
             return Result.Failure($"Failed to delete Patreon connection: {ex.Message}");
         }
     }
@@ -47,6 +50,7 @@ public class PatreonConnectionRepository(IUnitOfWork uow) : BaseRepository(uow),
         }
         catch (DbException ex)
         {
+            logger.LogDebug("{ErrorMessage}", ex.Message);
             return Result<IEnumerable<PatreonConnectionEntity>>.Failure($"Failed to select all Patreon connections: {ex.Message}");
         }
     }
@@ -62,6 +66,7 @@ public class PatreonConnectionRepository(IUnitOfWork uow) : BaseRepository(uow),
         }
         catch (DbException ex)
         {
+            logger.LogDebug("{ErrorMessage}", ex.Message);
             return Result<PatreonConnectionEntity>.Failure($"Failed to select Patreon connection by ID: {ex.Message}");
         }
     }
@@ -77,6 +82,7 @@ public class PatreonConnectionRepository(IUnitOfWork uow) : BaseRepository(uow),
         }
         catch (DbException ex)
         {
+            logger.LogDebug("{ErrorMessage}", ex.Message);
             return Result<PatreonConnectionEntity>.Failure($"Failed to select Patreon connection by Patreon ID: {ex.Message}");
         }
     }
@@ -92,6 +98,7 @@ public class PatreonConnectionRepository(IUnitOfWork uow) : BaseRepository(uow),
         }
         catch (DbException ex)
         {
+            logger.LogDebug("{ErrorMessage}", ex.Message);
             return Result.Failure($"Failed to update Patreon connection tokens: {ex.Message}");
         }
     }
@@ -107,6 +114,7 @@ public class PatreonConnectionRepository(IUnitOfWork uow) : BaseRepository(uow),
         }
         catch (DbException ex)
         {
+            logger.LogDebug("{ErrorMessage}", ex.Message);
             return Result.Failure($"Failed to update Patreon connection profile: {ex.Message}");
         }
     }
@@ -120,6 +128,7 @@ public class PatreonConnectionRepository(IUnitOfWork uow) : BaseRepository(uow),
         }
         catch (DbException ex)
         {
+            logger.LogDebug("{ErrorMessage}", ex.Message);
             return Result<UserPatreonConnectionEntity>.Failure($"Failed to insert user Patreon connection: {ex.Message}");
         }
     }
@@ -135,6 +144,7 @@ public class PatreonConnectionRepository(IUnitOfWork uow) : BaseRepository(uow),
         }
         catch (DbException ex)
         {
+            logger.LogDebug("{ErrorMessage}", ex.Message);
             return Result.Failure($"Failed to delete user Patreon connection: {ex.Message}");
         }
     }
@@ -148,6 +158,7 @@ public class PatreonConnectionRepository(IUnitOfWork uow) : BaseRepository(uow),
         }
         catch (DbException ex)
         {
+            logger.LogDebug("{ErrorMessage}", ex.Message);
             return Result<IEnumerable<UserPatreonConnectionEntity>>.Failure($"Failed to select user Patreon connections: {ex.Message}");
         }
     }
@@ -161,6 +172,7 @@ public class PatreonConnectionRepository(IUnitOfWork uow) : BaseRepository(uow),
         }
         catch (DbException ex)
         {
+            logger.LogDebug("{ErrorMessage}", ex.Message);
             return Result<IEnumerable<UserByPatreonConnectionEntity>>.Failure($"Failed to select users by Patreon connection: {ex.Message}");
         }
     }

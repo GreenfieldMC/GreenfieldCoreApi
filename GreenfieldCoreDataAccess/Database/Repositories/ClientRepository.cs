@@ -3,10 +3,11 @@ using GreenfieldCoreDataAccess.Database.Models;
 using GreenfieldCoreDataAccess.Database.Procedures;
 using GreenfieldCoreDataAccess.Database.Repositories.Interfaces;
 using GreenfieldCoreDataAccess.Database.UnitOfWork;
+using Microsoft.Extensions.Logging;
 
 namespace GreenfieldCoreDataAccess.Database.Repositories;
 
-public class ClientRepository(IUnitOfWork uow) : BaseRepository(uow), IClientRepository
+public class ClientRepository(IUnitOfWork uow, ILogger<IClientRepository> logger) : BaseRepository(uow), IClientRepository
 {
     
     /// <inheritdoc />
@@ -20,6 +21,7 @@ public class ClientRepository(IUnitOfWork uow) : BaseRepository(uow), IClientRep
         }
         catch (DbException e)
         {
+            logger.LogDebug("{ErrorMessage}", e.Message);
             return Result<(Guid, DateTime)>.Failure($"Failed to register client: {e.Message}");
         }
     }
@@ -34,6 +36,7 @@ public class ClientRepository(IUnitOfWork uow) : BaseRepository(uow), IClientRep
         }
         catch (DbException e)
         {
+            logger.LogDebug("{ErrorMessage}", e.Message);
             return Result<bool>.Failure($"Failed to verify client credentials: {e.Message}");
         }
     }
@@ -50,6 +53,7 @@ public class ClientRepository(IUnitOfWork uow) : BaseRepository(uow), IClientRep
         }
         catch (DbException ex)
         {
+            logger.LogDebug("{ErrorMessage}", ex.Message);
             return Result<ClientEntity>.Failure($"Failed to get client by ID: {ex.Message}");
         }
     }
@@ -66,6 +70,7 @@ public class ClientRepository(IUnitOfWork uow) : BaseRepository(uow), IClientRep
         }
         catch (DbException ex)
         {
+            logger.LogDebug("{ErrorMessage}", ex.Message);
             return Result<ClientEntity>.Failure($"Failed to get client by name: {ex.Message}");
         }
     }
@@ -80,6 +85,7 @@ public class ClientRepository(IUnitOfWork uow) : BaseRepository(uow), IClientRep
         }
         catch (DbException ex)
         {
+            logger.LogDebug("{ErrorMessage}", ex.Message);
             return Result<IEnumerable<ClientEntity>>.Failure($"Failed to get clients: {ex.Message}");
         }
     }
@@ -93,6 +99,7 @@ public class ClientRepository(IUnitOfWork uow) : BaseRepository(uow), IClientRep
                 ? Result.Success()
                 : Result.Failure("No client was deleted.");
         } catch (DbException ex) {
+            logger.LogDebug("{ErrorMessage}", ex.Message);
             return Result.Failure($"Failed to delete client: {ex.Message}");
         }
     }
@@ -104,6 +111,7 @@ public class ClientRepository(IUnitOfWork uow) : BaseRepository(uow), IClientRep
             var result = await Connection.QueryProcedure(StoredProcs.Clients.SelectClientRoles, clientId, Transaction);
             return Result<IEnumerable<ClientRoleEntity>>.Success(result);
         } catch (DbException ex) {
+            logger.LogDebug("{ErrorMessage}", ex.Message);
             return Result<IEnumerable<ClientRoleEntity>>.Failure($"Failed to get client roles: {ex.Message}");
         }
     }
@@ -118,6 +126,7 @@ public class ClientRepository(IUnitOfWork uow) : BaseRepository(uow), IClientRep
                 ? Result.Success()
                 : Result.Failure("No role was assigned to the client.");
         } catch (DbException ex) {
+            logger.LogDebug("{ErrorMessage}", ex.Message);
             return Result.Failure($"Failed to assign role to client: {ex.Message}");
         }
     }
@@ -131,6 +140,7 @@ public class ClientRepository(IUnitOfWork uow) : BaseRepository(uow), IClientRep
                 ? Result.Success()
                 : Result.Failure("No role was removed from the client.");
         } catch (DbException ex) {
+            logger.LogDebug("{ErrorMessage}", ex.Message);
             return Result.Failure($"Failed to remove role from client: {ex.Message}");
         }
     }
@@ -142,6 +152,7 @@ public class ClientRepository(IUnitOfWork uow) : BaseRepository(uow), IClientRep
             var affected = await Connection.ExecuteProcedure(StoredProcs.Clients.ClearClientRoles, clientId, Transaction);
             return Result<int>.Success(affected);
         } catch (DbException ex) {
+            logger.LogDebug("{ErrorMessage}", ex.Message);
             return Result<int>.Failure($"Failed to clear client roles: {ex.Message}");
         }
     }
@@ -156,6 +167,7 @@ public class ClientRepository(IUnitOfWork uow) : BaseRepository(uow), IClientRep
                 ? Result.Success()
                 : Result.Failure("No client name was updated.");
         } catch (DbException ex) {
+            logger.LogDebug("{ErrorMessage}", ex.Message);
             return Result.Failure($"Failed to update client name: {ex.Message}");
         }
     }
@@ -170,6 +182,7 @@ public class ClientRepository(IUnitOfWork uow) : BaseRepository(uow), IClientRep
                 ? Result.Success()
                 : Result.Failure("No client secret was updated.");
         } catch (DbException ex) {
+            logger.LogDebug("{ErrorMessage}", ex.Message);
             return Result.Failure($"Failed to update client secret: {ex.Message}");
         }
     }

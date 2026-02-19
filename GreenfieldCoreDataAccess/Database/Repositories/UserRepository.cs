@@ -3,10 +3,11 @@ using GreenfieldCoreDataAccess.Database.Models;
 using GreenfieldCoreDataAccess.Database.Procedures;
 using GreenfieldCoreDataAccess.Database.Repositories.Interfaces;
 using GreenfieldCoreDataAccess.Database.UnitOfWork;
+using Microsoft.Extensions.Logging;
 
 namespace GreenfieldCoreDataAccess.Database.Repositories;
 
-public class UserRepository(IUnitOfWork uow) : BaseRepository(uow), IUserRepository
+public class UserRepository(IUnitOfWork uow, ILogger<IUserRepository> logger) : BaseRepository(uow), IUserRepository
 {
     
     public async Task<Result<UserEntity>> SelectUserByUserId(long userId)
@@ -15,6 +16,7 @@ public class UserRepository(IUnitOfWork uow) : BaseRepository(uow), IUserReposit
             var result = await Connection.QuerySingleProcedure(StoredProcs.Users.SelectUserByUserId, userId, Transaction);
             return Result<UserEntity>.Success(result);
         } catch (DbException ex) {
+            logger.LogDebug("{ErrorMessage}", ex.Message);
             return Result<UserEntity>.Failure($"Failed to get user by ID: {ex.Message}");
         }
     }
@@ -26,6 +28,7 @@ public class UserRepository(IUnitOfWork uow) : BaseRepository(uow), IUserReposit
             var result = await Connection.QuerySingleProcedure(StoredProcs.Users.SelectUserByUuid, minecraftUuid, Transaction);
             return Result<UserEntity>.Success(result);
         } catch (DbException ex) {
+            logger.LogDebug("{ErrorMessage}", ex.Message);
             return Result<UserEntity>.Failure($"Failed to get user by UUID: {ex.Message}");
         }
     }
@@ -36,6 +39,7 @@ public class UserRepository(IUnitOfWork uow) : BaseRepository(uow), IUserReposit
             var result = await Connection.QuerySingleProcedure(StoredProcs.Users.InsertUser, (minecraftUuid, minecraftUsername), Transaction);
             return Result<UserEntity>.Success(result);
         } catch (DbException ex) {
+            logger.LogDebug("{ErrorMessage}", ex.Message);
             return Result<UserEntity>.Failure($"Failed to create user: {ex.Message}");
         }
     }
@@ -46,6 +50,7 @@ public class UserRepository(IUnitOfWork uow) : BaseRepository(uow), IUserReposit
             var rows = await Connection.ExecuteProcedure(StoredProcs.Users.UpdateUsername, (minecraftUuid, newMinecraftUsername), Transaction);
             return rows > 0 ? Result.Success() : Result.Failure("No rows were updated.");
         } catch (DbException ex) {
+            logger.LogDebug("{ErrorMessage}", ex.Message);
             return Result.Failure($"Failed to update username: {ex.Message}");
         }
     }

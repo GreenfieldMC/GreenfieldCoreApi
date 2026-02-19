@@ -107,7 +107,7 @@ public static class Startup
     {
         configBuilder.SetBasePath(env.ContentRootPath)
             .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
-            .AddJsonFile($"appsettings.{env.EnvironmentName}.json", optional: true)
+            .AddJsonFile($"appsettings.{env.EnvironmentName}.json", optional: true, reloadOnChange: true)
             .AddJsonFile($"connectionstrings.{env.EnvironmentName}.json", optional: false)
             .AddJsonFile($"jwtsettings.{env.EnvironmentName}.json", optional: false)
             .AddJsonFile($"services.{env.EnvironmentName}.json", optional: false)

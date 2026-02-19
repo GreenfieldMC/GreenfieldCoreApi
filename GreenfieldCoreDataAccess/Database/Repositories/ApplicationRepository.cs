@@ -4,10 +4,11 @@ using GreenfieldCoreDataAccess.Database.Models;
 using GreenfieldCoreDataAccess.Database.Procedures;
 using GreenfieldCoreDataAccess.Database.Repositories.Interfaces;
 using GreenfieldCoreDataAccess.Database.UnitOfWork;
+using Microsoft.Extensions.Logging;
 
 namespace GreenfieldCoreDataAccess.Database.Repositories;
 
-public class ApplicationRepository(IUnitOfWork unitOfWork) : BaseRepository(unitOfWork), IApplicationRepository
+public class ApplicationRepository(IUnitOfWork unitOfWork, ILogger<IApplicationRepository> logger) : BaseRepository(unitOfWork), IApplicationRepository
 {
 
     public async Task<Result<IEnumerable<ApplicationEntity>>> SelectApplicationsByUserId(long userId)
@@ -19,6 +20,7 @@ public class ApplicationRepository(IUnitOfWork unitOfWork) : BaseRepository(unit
         }
         catch (DbException ex)
         {
+            logger.LogDebug("{ErrorMessage}", ex.Message);
             return Result<IEnumerable<ApplicationEntity>>.Failure($"Failed to retrieve builder applications: {ex.Message}", HttpStatusCode.InternalServerError);
         }
     }
@@ -32,6 +34,7 @@ public class ApplicationRepository(IUnitOfWork unitOfWork) : BaseRepository(unit
         }
         catch (DbException ex)
         {
+            logger.LogDebug("{ErrorMessage}", ex.Message);
             return Result<IEnumerable<ApplicationImageLinkEntity>>.Failure($"Failed to retrieve builder application images: {ex.Message}", HttpStatusCode.InternalServerError);
         }
     }
@@ -45,6 +48,7 @@ public class ApplicationRepository(IUnitOfWork unitOfWork) : BaseRepository(unit
         }
         catch (DbException ex)
         {
+            logger.LogDebug("{ErrorMessage}", ex.Message);
             return Result<IEnumerable<ApplicationStatusEntity>>.Failure($"Failed to retrieve builder application statuses: {ex.Message}", HttpStatusCode.InternalServerError);
         }
     }
@@ -58,6 +62,7 @@ public class ApplicationRepository(IUnitOfWork unitOfWork) : BaseRepository(unit
         }
         catch (DbException ex)
         {
+            logger.LogDebug("{ErrorMessage}", ex.Message);
             return Result<IEnumerable<LatestApplicationStatusEntity>>.Failure($"Failed to retrieve builder applications with latest status: {ex.Message}", HttpStatusCode.InternalServerError);
         }
     }
@@ -73,6 +78,7 @@ public class ApplicationRepository(IUnitOfWork unitOfWork) : BaseRepository(unit
         }
         catch (DbException ex)
         {
+            logger.LogDebug("{ErrorMessage}", ex.Message);
             return Result<ApplicationEntity>.Failure($"Failed to insert builder application: {ex.Message}", HttpStatusCode.InternalServerError);
         }
     }
@@ -88,6 +94,7 @@ public class ApplicationRepository(IUnitOfWork unitOfWork) : BaseRepository(unit
         }
         catch (DbException ex)
         {
+            logger.LogDebug("{ErrorMessage}", ex.Message);
             return Result<ApplicationStatusEntity>.Failure($"Failed to insert builder application status: {ex.Message}", HttpStatusCode.InternalServerError);
         }
     }
@@ -103,6 +110,7 @@ public class ApplicationRepository(IUnitOfWork unitOfWork) : BaseRepository(unit
         }
         catch (DbException ex)
         {
+            logger.LogDebug("{ErrorMessage}", ex.Message);
             return Result<ApplicationImageLinkEntity>.Failure($"Failed to insert builder application image: {ex.Message}", HttpStatusCode.InternalServerError);
         }
     }
@@ -118,6 +126,7 @@ public class ApplicationRepository(IUnitOfWork unitOfWork) : BaseRepository(unit
         }
         catch (DbException ex)
         {
+            logger.LogDebug("{ErrorMessage}", ex.Message);
             return Result<ApplicationImageLinkEntity>.Failure($"Failed to update builder application image: {ex.Message}", HttpStatusCode.InternalServerError);
         }
     }
@@ -133,6 +142,7 @@ public class ApplicationRepository(IUnitOfWork unitOfWork) : BaseRepository(unit
         }
         catch (DbException ex)
         {
+            logger.LogDebug("{ErrorMessage}", ex.Message);
             return Result<ApplicationEntity>.Failure($"Failed to retrieve builder application: {ex.Message}", HttpStatusCode.InternalServerError);
         }
     }

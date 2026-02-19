@@ -3,10 +3,11 @@ using GreenfieldCoreDataAccess.Database.Models;
 using GreenfieldCoreDataAccess.Database.Procedures;
 using GreenfieldCoreDataAccess.Database.Repositories.Interfaces;
 using GreenfieldCoreDataAccess.Database.UnitOfWork;
+using Microsoft.Extensions.Logging;
 
 namespace GreenfieldCoreDataAccess.Database.Repositories;
 
-public class DiscordConnectionRepository(IUnitOfWork uow) : BaseRepository(uow), IDiscordConnectionRepository
+public class DiscordConnectionRepository(IUnitOfWork uow, ILogger<IDiscordConnectionRepository> logger) : BaseRepository(uow), IDiscordConnectionRepository
 {
     public async Task<Result<DiscordConnectionEntity>> InsertConnection(string refreshToken, string accessToken, string tokenType, DateTime tokenExpiry, string scope, ulong discordSnowflake, string discordUsername)
     {
@@ -18,6 +19,7 @@ public class DiscordConnectionRepository(IUnitOfWork uow) : BaseRepository(uow),
                 : Result<DiscordConnectionEntity>.Success(result);
         } catch (DbException ex)
         {
+            logger.LogDebug("{ErrorMessage}", ex.Message);
             return Result<DiscordConnectionEntity>.Failure($"Failed to insert Discord connection: {ex.Message}");
         }
     }
@@ -32,6 +34,7 @@ public class DiscordConnectionRepository(IUnitOfWork uow) : BaseRepository(uow),
                 : Result.Failure("No rows were deleted.");
         } catch (DbException ex)
         {
+            logger.LogDebug("{ErrorMessage}", ex.Message);
             return Result.Failure($"Failed to delete Discord connection: {ex.Message}");
         }
     }
@@ -44,6 +47,7 @@ public class DiscordConnectionRepository(IUnitOfWork uow) : BaseRepository(uow),
             return Result<IEnumerable<DiscordConnectionEntity>>.Success(result);
         } catch (DbException ex)
         {
+            logger.LogDebug("{ErrorMessage}", ex.Message);
             return Result<IEnumerable<DiscordConnectionEntity>>.Failure($"Failed to select all Discord connections: {ex.Message}");
         }
     }
@@ -58,6 +62,7 @@ public class DiscordConnectionRepository(IUnitOfWork uow) : BaseRepository(uow),
                 : Result<DiscordConnectionEntity>.Success(result);
         } catch (DbException ex)
         {
+            logger.LogDebug("{ErrorMessage}", ex.Message);
             return Result<DiscordConnectionEntity>.Failure($"Failed to select Discord connection by ID: {ex.Message}");
         }
     }
@@ -72,6 +77,7 @@ public class DiscordConnectionRepository(IUnitOfWork uow) : BaseRepository(uow),
                 : Result<DiscordConnectionEntity>.Success(result);
         } catch (DbException ex)
         {
+            logger.LogDebug("{ErrorMessage}", ex.Message);
             return Result<DiscordConnectionEntity>.Failure($"Failed to select Discord connection by snowflake: {ex.Message}");
         }
     }
@@ -86,6 +92,7 @@ public class DiscordConnectionRepository(IUnitOfWork uow) : BaseRepository(uow),
                 : Result.Failure("No rows were updated.");
         } catch (DbException ex)
         {
+            logger.LogDebug("{ErrorMessage}", ex.Message);
             return Result.Failure($"Failed to update Discord connection tokens: {ex.Message}");
         }
     }
@@ -100,6 +107,7 @@ public class DiscordConnectionRepository(IUnitOfWork uow) : BaseRepository(uow),
                 : Result.Failure("No rows were updated.");
         } catch (DbException ex)
         {
+            logger.LogDebug("{ErrorMessage}", ex.Message);
             return Result.Failure($"Failed to update Discord connection profile: {ex.Message}");
         }
     }
@@ -112,6 +120,7 @@ public class DiscordConnectionRepository(IUnitOfWork uow) : BaseRepository(uow),
             return Result<UserDiscordConnectionEntity>.Success(result);
         } catch (DbException ex)
         {
+            logger.LogDebug("{ErrorMessage}", ex.Message);
             return Result<UserDiscordConnectionEntity>.Failure($"Failed to insert user discord connection: {ex.Message}");
         }
     }
@@ -126,6 +135,7 @@ public class DiscordConnectionRepository(IUnitOfWork uow) : BaseRepository(uow),
                 : Result.Failure("No rows were deleted.");
         } catch (DbException ex)
         {
+            logger.LogDebug("{ErrorMessage}", ex.Message);
             return Result.Failure($"Failed to delete user discord connection: {ex.Message}");
         }
     }
@@ -138,6 +148,7 @@ public class DiscordConnectionRepository(IUnitOfWork uow) : BaseRepository(uow),
             return Result<IEnumerable<UserDiscordConnectionEntity>>.Success(result);
         } catch (DbException ex)
         {
+            logger.LogDebug("{ErrorMessage}", ex.Message);
             return Result<IEnumerable<UserDiscordConnectionEntity>>.Failure($"Failed to select user discord connections: {ex.Message}");
         }
     }
@@ -150,6 +161,7 @@ public class DiscordConnectionRepository(IUnitOfWork uow) : BaseRepository(uow),
             return Result<IEnumerable<UserByDiscordConnectionEntity>>.Success(result);
         } catch (DbException ex)
         {
+            logger.LogDebug("{ErrorMessage}", ex.Message);
             return Result<IEnumerable<UserByDiscordConnectionEntity>>.Failure($"Failed to select users by discord connection: {ex.Message}");
         }
     }
