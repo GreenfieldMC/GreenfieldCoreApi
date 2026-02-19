@@ -132,7 +132,7 @@ public class PatreonApi(ILogger<IPatreonApi> logger, IConfiguration configuratio
         if (!long.TryParse(identityData.Data.Id, out var patreonId))
             return Result<UserPatreonConnection>.Failure("Failed to parse Patreon ID.");
 
-        var existingConnection = await patreonService.GetPatreonConnection(patreonId);
+        var existingConnection = await patreonService.GetPatreonConnectionByPatreonId(patreonId);
         if (existingConnection.TryGetDataNonNull(out var patreonConnection))
         {
             var updateExistingResult = await patreonService.UpdatePatreonConnectionTokens(patreonConnection.PatreonConnectionId, tokenData.RefreshToken, tokenData.AccessToken, tokenData.TokenType, DateTime.Now.AddSeconds(tokenData.ExpiresIn), tokenData.Scope);
