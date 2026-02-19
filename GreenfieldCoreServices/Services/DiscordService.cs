@@ -112,7 +112,7 @@ public class DiscordService(
         
         var insertResult = await repo.InsertConnection(refreshToken, accessToken, tokenType, tokenExpiry, scope, discordSnowflake, discordUsername);
         if (!insertResult.TryGetDataNonNull(out var entity))
-            return Result<DiscordConnection>.Failure("Failed to create Discord connection.");
+            return Result<DiscordConnection>.Failure("Failed to create Discord connection - " + insertResult.ErrorMessage, insertResult.StatusCode);
         uow.CompleteAndCommit();
 
         var mapped = DiscordConnection.FromModel(entity);

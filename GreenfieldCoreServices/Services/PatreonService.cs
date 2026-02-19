@@ -65,7 +65,7 @@ public class PatreonService(IUnitOfWork uow,
         
         var insertResult = await repo.InsertConnection(refreshToken, accessToken, tokenType, tokenExpiry, scope, patreonId, fullName, pledge);
         if (!insertResult.TryGetDataNonNull(out var entitiy))
-            return Result<PatreonConnection>.Failure("Failed to create Patreon connection.", insertResult.StatusCode);
+            return Result<PatreonConnection>.Failure("Failed to create Patreon connection - " + insertResult.ErrorMessage, insertResult.StatusCode);
         uow.CompleteAndCommit();
         
         var mapped = PatreonConnection.FromModel(entitiy);
