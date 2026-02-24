@@ -20,7 +20,7 @@ public class GitHubApi(ILogger<IGitHubApi> logger, IConfiguration configuration,
         if (accept is not null)
             request.Headers.Add("Accept", accept);
         if (Token is not null)
-            request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", Token);
+            request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("token", Token);
     }
 
     public async Task<Result<List<GitHubBranch>>> GetBranches()
