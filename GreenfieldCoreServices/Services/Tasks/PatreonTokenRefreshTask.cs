@@ -88,7 +88,7 @@ public class PatreonTokenRefreshTask(TaskStartSignalService startSignal, IServic
         if (connection.RefreshBy <= DateTime.Now)
         {
             logger.LogWarning("RefreshTask {PatreonConnectionId}: Patreon token expired. All linked users will be unlinked.", connection.PatreonConnectionId);
-            _ = patreonService.DeletePatreonConnection(connection.PatreonConnectionId);
+            await patreonService.DeletePatreonConnection(connection.PatreonConnectionId);
             return false;
         }
 

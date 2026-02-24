@@ -13,5 +13,11 @@
     "ClientSecret": "your-discord-client-secret",
     "RedirectUri": "your-discord-redirect-uri",
     "DisconnectUri": "your-discord-disconnect-uri"
+  },
+  "GitHub": {
+    "Owner": "your-github-username",
+    "Repo": "your-repo-name",
+    "ResourcePackName": "your-resource-pack-name",
+    "Token": "your-github-personal-access-token (optional, remove if not needed)"
   }
 }

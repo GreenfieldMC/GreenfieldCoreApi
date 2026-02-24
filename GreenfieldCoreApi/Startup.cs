@@ -14,6 +14,7 @@ using GreenfieldCoreServices.Models.Connections.Discord;
 using GreenfieldCoreServices.Models.Connections.Patreon;
 using GreenfieldCoreServices.Models.Discord;
 using GreenfieldCoreServices.Models.Patreon;
+using GreenfieldCoreServices.Models.Resources;
 using GreenfieldCoreServices.Models.Users;
 using GreenfieldCoreServices.Services;
 using GreenfieldCoreServices.Services.Caching;
@@ -83,7 +84,9 @@ public static class Startup
         services.AddTransient<IBuilderApplicationService, BuilderApplicationService>();
         services.AddHttpClient<IPatreonApi, PatreonApi>(client => { client.BaseAddress = new Uri("https://www.patreon.com/api/oauth2/"); });
         services.AddHttpClient<IDiscordApi, DiscordApi>(client => { client.BaseAddress = new Uri("https://discord.com"); });
+        services.AddHttpClient<IGitHubApi, GitHubApi>(client => { client.BaseAddress = new Uri("https://api.github.com"); });
 
+        services.AddTransient<IResourcePackService, ResourcePackService>();
         services.AddSingleton<TaskStartSignalService>();
     }
 
@@ -101,6 +104,8 @@ public static class Startup
         services.AddSingleton<ICacheService<(long userId, long patreonConnectionId), PatreonDisconnectState>, PatreonDisconnectStateCache>();
         services.AddSingleton<ICacheService<long, DiscordConnectionState>, DiscordConnectionStateCache>();
         services.AddSingleton<ICacheService<(long userId, long discordConnectionId), DiscordDisconnectState>, DiscordDisconnectStateCache>();
+        services.AddSingleton<ICacheService<string, ResourcePackCacheEntry>, ResourcePackCacheService>();
+        services.AddSingleton<ICacheService<Guid, DownloadToken>, DownloadTokenCacheService>();
     }
 
     internal static void ConfigureConfiguration(this IConfigurationBuilder configBuilder, IWebHostEnvironment env)
@@ -190,6 +195,7 @@ public static class Startup
             .AddClientCredentialsFlow("OAuth2", flow =>
                 {
                     flow.TokenUrl = "/api/v1.0/login/token";
+                    flow.CredentialsLocation = CredentialsLocation.Body;
                 })
             .WithPersistentAuthentication()
         );

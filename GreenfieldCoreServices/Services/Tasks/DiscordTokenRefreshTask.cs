@@ -78,7 +78,7 @@ public class DiscordTokenRefreshTask(TaskStartSignalService startSignal, IServic
         if (connection.RefreshBy <= DateTime.Now)
         {
             logger.LogWarning("RefreshTask {DiscordConnectionId}: Discord token expired. All linked users will be unlinked.", connection.DiscordConnectionId);
-            _ = discordService.DeleteDiscordConnection(connection.DiscordConnectionId);
+            await discordService.DeleteDiscordConnection(connection.DiscordConnectionId);
             return false;
         }
 
@@ -109,7 +109,7 @@ public class DiscordTokenRefreshTask(TaskStartSignalService startSignal, IServic
         if (!updateTokensResult.IsSuccessful)
         {
             logger.LogError("RefreshTask {DiscordConnectionId}: Failed to update Discord tokens in database. Unlinking this connection to prevent future errors. Error: {ErrorMessage}", connection.DiscordConnectionId, updateTokensResult.ErrorMessage);
-            _ = discordService.DeleteDiscordConnection(connection.DiscordConnectionId);
+            await discordService.DeleteDiscordConnection(connection.DiscordConnectionId);
             return false;
         }
 
