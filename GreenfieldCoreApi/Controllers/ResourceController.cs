@@ -22,6 +22,8 @@ public partial class ResourceController(
     [GeneratedRegex(@"^[a-zA-Z0-9._\-/]+$")]
     private static partial Regex BranchNameRegex();
 
+    private static string LegalFileName(string fileName) => Path.GetInvalidFileNameChars().Aggregate(fileName, (current, c) => current.Replace(c, '_'));
+    
     /// <summary>
     /// Lists the available branches for the resource pack repository.
     /// </summary>
@@ -84,7 +86,8 @@ public partial class ResourceController(
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> GetResourcePack([FromRoute] string branchName, [FromQuery] Guid token)
     {
-        if (string.IsNullOrWhiteSpace(branchName) || !BranchNameRegex().IsMatch(branchName))
+        var actualBranch = Uri.UnescapeDataString(branchName);
+        if (string.IsNullOrWhiteSpace(actualBranch) || !BranchNameRegex().IsMatch(actualBranch))
             return Problem(statusCode: StatusCodes.Status400BadRequest,
                 detail: "Invalid branch name. Branch names may only contain alphanumeric characters, dots, hyphens, underscores, and forward slashes.");
 
@@ -102,18 +105,18 @@ public partial class ResourceController(
                 detail: "Download token has expired. Please request a new download link.");
 
         // Verify the token was issued for this branch
-        if (!string.Equals(downloadToken.BranchName, branchName, StringComparison.OrdinalIgnoreCase))
+        if (!string.Equals(downloadToken.BranchName, actualBranch, StringComparison.OrdinalIgnoreCase))
             return Problem(statusCode: StatusCodes.Status403Forbidden,
                 detail: "Download token does not match the requested branch.");
 
-        var result = await resourcePackService.GetResourcePack(branchName);
+        var result = await resourcePackService.GetResourcePack(actualBranch);
         if (!result.TryGetDataNonNull(out var resourcePack))
             return Problem(statusCode: result.GetStatusCodeInt(), detail: result.ErrorMessage);
 
         var packName = configuration["GitHub:ResourcePackName"] ?? "resourcepack";
         var shortHash = resourcePack.CommitHash.Length >= 7 ? resourcePack.CommitHash[..7] : resourcePack.CommitHash;
-        var fileName = $"{packName}-{branchName}-{shortHash}.zip";
+        var fileName = $"{packName}-{actualBranch}-{shortHash}.zip";
 
-        return File(resourcePack.ZipBytes, "application/zip", fileName);
+        return File(resourcePack.ZipBytes, "application/zip", LegalFileName(fileName));
     }
 }
