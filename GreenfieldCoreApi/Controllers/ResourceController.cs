@@ -1,5 +1,6 @@
 using System.Text.RegularExpressions;
 using Asp.Versioning;
+using GreenfieldCoreApi.Extensions;
 using GreenfieldCoreServices.Models.Resources;
 using GreenfieldCoreServices.Services.External.Interfaces;
 using GreenfieldCoreServices.Services.Interfaces;
@@ -88,30 +89,26 @@ public partial class ResourceController(
     {
         var actualBranch = Uri.UnescapeDataString(branchName);
         if (string.IsNullOrWhiteSpace(actualBranch) || !BranchNameRegex().IsMatch(actualBranch))
-            return Problem(statusCode: StatusCodes.Status400BadRequest,
-                detail: "Invalid branch name. Branch names may only contain alphanumeric characters, dots, hyphens, underscores, and forward slashes.");
+            return ResourceHelpers.Redirect(RedirectType.Error, null, "Invalid branch name. Branch names may only contain alphanumeric characters, dots, hyphens, underscores, and forward slashes.");
 
         // Validate the one-time download token
         if (!downloadTokenCache.TryGetValue(token, out var downloadToken))
-            return Problem(statusCode: StatusCodes.Status403Forbidden,
-                detail: "Invalid or expired download token. Please request a new download link.");
+            return ResourceHelpers.Redirect(RedirectType.Error, null, "Invalid or expired download token. Please request a new download link.");
 
         // Consume the token immediately so it cannot be reused
         downloadTokenCache.RemoveValue(token);
 
         // Verify the token hasn't expired
         if (downloadToken.CreatedAt + TokenExpiry < DateTime.UtcNow)
-            return Problem(statusCode: StatusCodes.Status403Forbidden,
-                detail: "Download token has expired. Please request a new download link.");
+            return ResourceHelpers.Redirect(RedirectType.Error, null, "Download token has expired. Please request a new download link.");
 
         // Verify the token was issued for this branch
         if (!string.Equals(downloadToken.BranchName, actualBranch, StringComparison.OrdinalIgnoreCase))
-            return Problem(statusCode: StatusCodes.Status403Forbidden,
-                detail: "Download token does not match the requested branch.");
+            return ResourceHelpers.Redirect(RedirectType.Error, null, "Download token does not match the requested branch.");
 
         var result = await resourcePackService.GetResourcePack(actualBranch);
         if (!result.TryGetDataNonNull(out var resourcePack))
-            return Problem(statusCode: result.GetStatusCodeInt(), detail: result.ErrorMessage);
+            return ResourceHelpers.Redirect(RedirectType.Error, null, result.ErrorMessage ?? "Unknown error. Report this.");
 
         var packName = configuration["GitHub:ResourcePackName"] ?? "resourcepack";
         var shortHash = resourcePack.CommitHash.Length >= 7 ? resourcePack.CommitHash[..7] : resourcePack.CommitHash;
