@@ -1,3 +1,4 @@
+using System.Net;
 using GreenfieldCoreDataAccess.Database.Repositories.Interfaces;
 using GreenfieldCoreDataAccess.Database.UnitOfWork;
 using GreenfieldCoreServices.Models.Users;
@@ -5,47 +6,71 @@ using GreenfieldCoreServices.Services.Interfaces;
 
 namespace GreenfieldCoreServices.Services;
 
-public class UserService(IUnitOfWork uow) : IUserService
+public class UserService(IUnitOfWork uow, ICacheService<long, User> userCache) : IUserService
 {
-    public async Task<User?> CreateUser(Guid minecraftUuid, string username)
+    public async Task<Result<User>> CreateUser(Guid minecraftUuid, string username)
     {
+        if (!IsValidUsername(username))
+            return Result<User>.Failure("A valid username must be provided.");
         var repo = uow.Repository<IUserRepository>();
         
-        var foundUser = await repo.GetUserByUuid(minecraftUuid);
-        if (foundUser is not null) return null;
+        var didFindUser = userCache.TryGetValue(u => u.MinecraftUuid == minecraftUuid, out _) || (await repo.SelectUserByUuid(minecraftUuid)).GetOrThrow() is not null;
+        if (didFindUser) return Result<User>.Failure("User already exists.", HttpStatusCode.Conflict);
         
         uow.BeginTransaction();
-        var created = await repo.CreateUser(minecraftUuid, username);
-        if (created is null) return null;
+        var created = (await repo.CreateUser(minecraftUuid, username)).GetOrThrow();
+        if (created is null) return Result<User>.Failure("User could not be created.");
         uow.CompleteAndCommit();
-
-        return User.FromDbModel(created);
+        var createdUser = User.FromModel(created);
+        userCache.SetValue(createdUser.UserId, createdUser);
+        return Result<User>.Success(createdUser);
     }
 
-    public async Task<User?> GetUserByUuid(Guid minecraftUuid)
+    public async Task<Result<User>> GetUserByUuid(Guid minecraftUuid)
     {
-        var repo = uow.Repository<IUserRepository>();
-        var foundUser = await repo.GetUserByUuid(minecraftUuid);
+        if (userCache.TryGetValue(u => u.MinecraftUuid == minecraftUuid, out var cachedUser))
+            return Result<User>.Success(cachedUser);
         
-        return foundUser is null ? null : User.FromDbModel(foundUser);
+        var repo = uow.Repository<IUserRepository>();
+        var foundUser = (await repo.SelectUserByUuid(minecraftUuid)).GetOrThrow();
+        return foundUser is null ? Result<User>.Failure("User not found.", HttpStatusCode.NotFound) : Result<User>.Success(User.FromModel(foundUser));
     }
 
-    public Task<User?> GetUserByUserId(long userId)
+    public async Task<Result<User>> GetUserByUserId(long userId)
     {
+        if (userCache.TryGetValue(userId, out var cachedUser))
+            return Result<User>.Success(cachedUser);
+        
         var repo = uow.Repository<IUserRepository>();
-        return repo.GetUserByUserId(userId).ContinueWith(t =>
-            t.Result is null ? null : User.FromDbModel(t.Result));
+        var foundUser = (await repo.SelectUserByUserId(userId)).GetOrThrow();
+        return foundUser is null ? Result<User>.Failure("User not found.", HttpStatusCode.NotFound) : Result<User>.Success(User.FromModel(foundUser));
     }
 
-    public async Task<User?> UpdateUsername(Guid minecraftUuid, string newUsername)
+    public async Task<Result<User>> UpdateUsername(Guid minecraftUuid, string newUsername)
     {
+        // Guid.Empty is the System user, can skip validation.
+        if (!IsValidUsername(newUsername) && minecraftUuid != Guid.Empty)
+            return Result<User>.Failure("A valid new username must be provided.");
+        
         var repo = uow.Repository<IUserRepository>();
+        
+        var existingUserResult = await GetUserByUuid(minecraftUuid);
+        if (!existingUserResult.IsSuccessful) return existingUserResult;
+        var existingUser = existingUserResult.GetNonNullOrThrow();
+        
         uow.BeginTransaction();
-        
-        if (!await repo.UpdateUsername(minecraftUuid, newUsername)) return null;
-        
-        var updatedUser = await repo.GetUserByUuid(minecraftUuid);
+        var updateResult = await repo.UpdateUsername(minecraftUuid, newUsername);
+        if (!updateResult.IsSuccessful) return Result<User>.Failure(updateResult.ErrorMessage ?? "Failed to update username.");
         uow.CompleteAndCommit();
-        return updatedUser is null ? null : User.FromDbModel(updatedUser);
+        
+        existingUser.Username = newUsername;
+        userCache.SetValue(existingUser.UserId, existingUser);
+        return Result<User>.Success(existingUser);
+    }
+    
+    private bool IsValidUsername(string username)
+    {
+        if (string.IsNullOrWhiteSpace(username)) return false;
+        return username.Length is >= 3 and <= 16 && username.All(char.IsLetterOrDigit);
     }
 }

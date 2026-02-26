@@ -1,0 +1,23 @@
+{
+  "Patreon": {
+    "ClientId": "your-client-id",
+    "ClientSecret": "your-client-secret",
+    "RedirectUri": "your-redirect-uri",
+    "CreatorAccessToken": "your-creator-access-token",
+    "CreatorRefreshToken": "your-creator-refresh-token",
+    "CampaignUrl": "link-to-your-patreon-campaign",
+    "DisconnectUri": "your-patreon-disconnect-uri"
+  },
+  "Discord": {
+    "ClientId": "your-discord-client-id",
+    "ClientSecret": "your-discord-client-secret",
+    "RedirectUri": "your-discord-redirect-uri",
+    "DisconnectUri": "your-discord-disconnect-uri"
+  },
+  "GitHub": {
+    "Owner": "your-github-username",
+    "Repo": "your-repo-name",
+    "ResourcePackName": "your-resource-pack-name",
+    "Token": "your-github-personal-access-token (optional, remove if not needed)"
+  }
+}

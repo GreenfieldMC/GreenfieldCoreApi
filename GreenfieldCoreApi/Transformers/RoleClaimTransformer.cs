@@ -30,7 +30,7 @@ public class RoleClaimTransformer : IClaimsTransformation
         {
             using var scope = _serviceScopeFactory.CreateScope();
             var clientAuthService = scope.ServiceProvider.GetRequiredService<IClientAuthService>();
-            client = await clientAuthService.GetClientById(clientId);
+            client = (await clientAuthService.GetClientById(clientId)).Data;
         }
         
         var roles = client?.Roles;

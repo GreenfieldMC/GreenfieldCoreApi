@@ -1,8 +1,8 @@
 -- DependsOn: ScriptHistory, Users
-create procedure if not exists usp_SelectUserByUserId(
+create procedure if not exists `Users.usp_SelectUserByUserId`(
     p_UserId bigint)
 begin
     select u.UserId, u.MinecraftUuid, u.MinecraftUsername, u.CreatedOn
-    from Users u
+    from `Users.Users` u
     where u.UserId = p_UserId;
 end;

@@ -1,10 +1,10 @@
 -- DependsOn: ScriptHistory, Clients
-create procedure if not exists usp_UpdateClientSecret(
+create procedure if not exists `Clients.usp_UpdateClientSecret`(
     p_ClientId char(36),
     p_NewSecretHash varchar(256),
     p_NewSalt varchar(255))
 begin
-    update Clients
+    update `Clients.Clients`
     set ClientSecretHash = p_NewSecretHash,
         Salt = p_NewSalt
     where ClientId = p_ClientId;

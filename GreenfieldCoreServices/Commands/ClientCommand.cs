@@ -15,7 +15,7 @@ public class ClientCommand(IClientAuthService authService) : BaseCommand("Client
         else if (subCommand == "info") await GetClientInfo(logger, args.Skip(1).ToArray());
         else if (subCommand == "list") await ListClients(logger);
         else if (subCommand == "modify") await ModifyClient(logger, args.Skip(1).ToArray());
-        else if (subCommand == "delete") DeleteClient(logger, args.Skip(1).ToArray());
+        else if (subCommand == "delete") await DeleteClient(logger, args.Skip(1).ToArray());
         else ShowHelp(logger);
     }
     
@@ -44,7 +44,10 @@ public class ClientCommand(IClientAuthService authService) : BaseCommand("Client
 
         var roles = args.Skip(1).ToList();
         
-        var clientTuple = await authService.RegisterClient(clientName, roles);
+        var clientTupleResult = await authService.RegisterClient(clientName, roles);
+        if (!clientTupleResult.IsSuccessful)
+            throw new CommandExecutionException("Failed to register client: " + clientTupleResult.ErrorMessage);
+        var clientTuple = clientTupleResult.GetNonNullOrThrow();
         
         logger.LogInformation("Client registered successfully. Copy these details, the secret will not be shown again:\n  Client ID: {ClientId}\n  Client Secret: {ClientSecret}", clientTuple.client.ClientId, clientTuple.secret);
     }
@@ -55,9 +58,10 @@ public class ClientCommand(IClientAuthService authService) : BaseCommand("Client
         if (clientName is null)
             throw new CommandExecutionException("Client name is required. Usage: " + Usage);
         
-        var foundClient = await authService.GetClientByName(clientName);
-        if (foundClient == null)
-            throw new CommandExecutionException($"Client with name '{clientName}' not found.");
+        var foundClientResult = await authService.GetClientByName(clientName);
+        if (!foundClientResult.IsSuccessful)
+            throw new CommandExecutionException($"Failed to retrieve client '{clientName}': {foundClientResult.ErrorMessage}");
+        var foundClient = foundClientResult.GetNonNullOrThrow();
         
         // Log client information in string literal format
         logger.LogInformation("""
@@ -71,7 +75,10 @@ public class ClientCommand(IClientAuthService authService) : BaseCommand("Client
     
     private async Task ListClients(ILogger<ICommandProcessService> logger)
     {
-        var clients = (await authService.GetAllClients()).ToList();
+        var clientsResult = await authService.GetAllClients();
+        if (!clientsResult.IsSuccessful)
+            throw new CommandExecutionException("Failed to retrieve clients: " + clientsResult.ErrorMessage);
+        var clients = clientsResult.GetNonNullOrThrow().ToList();
         
         if (clients.Count == 0) 
             throw new CommandExecutionException("There are no registered clients.");
@@ -93,9 +100,10 @@ public class ClientCommand(IClientAuthService authService) : BaseCommand("Client
         if (clientName is null)
             throw new CommandExecutionException("Client name is required. Usage: " + Usage);
 
-        var client = await authService.GetClientByName(clientName);
-        if (client == null)
-            throw new CommandExecutionException($"Client with name '{clientName}' not found.");
+        var clientResult = await authService.GetClientByName(clientName);
+        if (!clientResult.IsSuccessful)
+            throw new CommandExecutionException($"Client with name '{clientName}' not found: " + clientResult.ErrorMessage);
+        var client = clientResult.GetNonNullOrThrow();
         
         var action = args.GetArg<string>(1)?.ToLower();
         if (action is null)
@@ -103,9 +111,10 @@ public class ClientCommand(IClientAuthService authService) : BaseCommand("Client
 
         if (action == "refresh")
         {
-            var newSecret = await authService.RefreshClientSecret(client.ClientId);
-            if (newSecret is null)
-                throw new CommandExecutionException("Failed to refresh client secret.");
+            var newSecretResult = await authService.RefreshClientSecret(client.ClientId);
+            if (!newSecretResult.IsSuccessful)
+                throw new CommandExecutionException("Failed to refresh client secret: " + newSecretResult.ErrorMessage);
+            var newSecret = newSecretResult.GetNonNullOrThrow();
             logger.LogInformation("Client secret refreshed successfully. New Client Secret: {ClientSecret}", newSecret);
         }
         else if (action == "rename")
@@ -114,9 +123,10 @@ public class ClientCommand(IClientAuthService authService) : BaseCommand("Client
             if (newClientName is null)
                 throw new CommandExecutionException("New client name is required for rename action. Usage: " + Usage);
             
-            var updatedClient = await authService.UpdateClientName(client.ClientId, newClientName);
-            if (updatedClient is null)
-                throw new CommandExecutionException("Failed to rename client.");
+            var updatedClientResult = await authService.UpdateClientName(client.ClientId, newClientName);
+            if (!updatedClientResult.IsSuccessful)
+                throw new CommandExecutionException("Failed to rename client: " + updatedClientResult.ErrorMessage);
+            var updatedClient = updatedClientResult.GetNonNullOrThrow();
             logger.LogInformation("Client renamed successfully. New Client Name: {ClientName}", updatedClient.ClientName);
         }
         else if (action == "roles")
@@ -132,9 +142,10 @@ public class ClientCommand(IClientAuthService authService) : BaseCommand("Client
                     throw new CommandExecutionException("At least one role is required to add. Usage: " + Usage);
                 
                 var totalRoles = client.Roles.Union(rolesToAdd).ToList();
-                var resultingClient = await authService.UpdateClientRoles(client.ClientId, totalRoles);
-                if (resultingClient is null)
-                    throw new CommandExecutionException("Failed to add roles to client.");
+                var resultingClientResult = await authService.UpdateClientRoles(client.ClientId, totalRoles);
+                if (!resultingClientResult.IsSuccessful)
+                    throw new CommandExecutionException("Failed to add roles to client: " + resultingClientResult.ErrorMessage);
+                var resultingClient = resultingClientResult.GetNonNullOrThrow();
                 
                 logger.LogInformation("Roles added to client successfully. Current Roles: {Roles}", string.Join(", ", resultingClient.Roles));
             }
@@ -145,17 +156,19 @@ public class ClientCommand(IClientAuthService authService) : BaseCommand("Client
                     throw new CommandExecutionException("At least one role is required to remove. Usage: " + Usage);
                 
                 var totalRoles = client.Roles.Except(rolesToRemove).ToList();
-                var resultingClient = await authService.UpdateClientRoles(client.ClientId, totalRoles);
-                if (resultingClient is null)
-                    throw new CommandExecutionException("Failed to remove roles from client.");
+                var resultingClientResult = await authService.UpdateClientRoles(client.ClientId, totalRoles);
+                if (!resultingClientResult.IsSuccessful)
+                    throw new CommandExecutionException("Failed to remove roles from client: " + resultingClientResult.ErrorMessage);
+                var resultingClient = resultingClientResult.GetNonNullOrThrow();
                 
                 logger.LogInformation("Roles removed from client successfully. Current Roles: {Roles}", string.Join(", ", resultingClient.Roles));
             }
             else if (roleAction == "clear")
             {
-                var updatedClient = await authService.ClearClientRoles(client.ClientId);
-                if (updatedClient is null)
-                    throw new CommandExecutionException("Failed to clear client roles.");
+                var updatedClientResult = await authService.ClearClientRoles(client.ClientId);
+                if (!updatedClientResult.IsSuccessful)
+                    throw new CommandExecutionException("Failed to clear client roles: " + updatedClientResult.ErrorMessage);
+                var updatedClient = updatedClientResult.GetNonNullOrThrow();
 
                 if (updatedClient.Roles.Count > 0)
                     throw new CommandExecutionException("Some, but not all roles were cleared from the client. Roles remaining: " + string.Join(", ", updatedClient.Roles));
@@ -174,13 +187,15 @@ public class ClientCommand(IClientAuthService authService) : BaseCommand("Client
         if (clientName is null)
             throw new CommandExecutionException("Client name is required. Usage: " + Usage);
         
-        var client = await authService.GetClientByName(clientName);
-        if (client == null)
-            throw new CommandExecutionException($"Client with name '{clientName}' not found.");
+        var clientResult = await authService.GetClientByName(clientName);
+        if (!clientResult.IsSuccessful)
+            throw new CommandExecutionException($"Client with name '{clientName}' not found: " + clientResult.ErrorMessage);
+        var client = clientResult.GetNonNullOrThrow();
         
-        var deletedClient = await authService.DeleteClient(client.ClientId);
-        if (deletedClient == null)
-            throw new CommandExecutionException("Failed to delete client.");
+        var deletedClientResult = await authService.DeleteClient(client.ClientId);
+        if (!deletedClientResult.IsSuccessful)
+            throw new CommandExecutionException("Failed to delete client: " + deletedClientResult.ErrorMessage);
+        var deletedClient = deletedClientResult.GetNonNullOrThrow();
         
         logger.LogInformation("Client '{ClientName}' deleted successfully.", deletedClient.ClientName);
     }
