@@ -7,6 +7,7 @@ public record PatreonConnection : IModelConvertable<PatreonConnectionEntity, Pat
     
     public required long PatreonConnectionId { get; init; }
     public required string RefreshToken { get; init; }
+    public required string AccessToken { get; init; }
     public required DateTime RefreshBy { get; init; }
     public required DateTime? UpdatedOn { get; init; }
     public required DateTime CreatedOn { get; init; }
@@ -21,6 +22,7 @@ public record PatreonConnection : IModelConvertable<PatreonConnectionEntity, Pat
         {
             PatreonConnectionId = from.PatreonConnectionId,
             RefreshToken = from.RefreshToken,
+            AccessToken = from.AccessToken,
             RefreshBy = from.TokenExpiry,
             UpdatedOn = from.UpdatedOn,
             CreatedOn = from.CreatedOn,

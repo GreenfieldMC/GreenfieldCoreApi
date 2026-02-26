@@ -43,4 +43,12 @@ public interface IPatreonApi
     /// <returns></returns>
     Task<Result<string>> ResolveCampaignId();
 
+    /// <summary>
+    /// Fetches the latest profile data (full name, pledge) from the Patreon identity API using the
+    /// stored access token and persists the updated values to the connection record.
+    /// Returns 424 Failed Dependency if the stored access token is expired.
+    /// </summary>
+    /// <param name="patreonConnectionId">The internal Patreon connection ID to refresh.</param>
+    Task<Result<PatreonConnection>> RefreshPatreonConnectionData(long patreonConnectionId);
+
 }

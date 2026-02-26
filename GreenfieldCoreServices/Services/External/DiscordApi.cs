@@ -149,4 +149,23 @@ public class DiscordApi(ILogger<IDiscordApi> logger, IConfiguration configuratio
             ? Result<UserDiscordConnection>.Failure(linkResult.ErrorMessage!, linkResult.StatusCode)
             : Result<UserDiscordConnection>.Success(userConnection);
     }
+
+    public async Task<Result<DiscordConnection>> RefreshDiscordConnectionData(long discordConnectionId)
+    {
+        var connectionResult = await discordService.GetDiscordConnection(discordConnectionId);
+        if (!connectionResult.TryGetDataNonNull(out var connection))
+            return Result<DiscordConnection>.Failure(connectionResult.ErrorMessage!, connectionResult.StatusCode);
+
+        if (connection.RefreshBy <= DateTime.UtcNow)
+            return Result<DiscordConnection>.Failure(
+                "The Discord access token for this connection has expired. The user must re-link their Discord account.",
+                HttpStatusCode.FailedDependency);
+
+        var identityResult = await GetDiscordIdentity(connection.AccessToken);
+        if (!identityResult.TryGetDataNonNull(out var identity))
+            return Result<DiscordConnection>.Failure(identityResult.ErrorMessage!, identityResult.StatusCode);
+
+        var discordUsername = identity.GlobalName ?? identity.Username;
+        return await discordService.UpdateDiscordConnectionProfile(discordConnectionId, discordUsername);
+    }
 }

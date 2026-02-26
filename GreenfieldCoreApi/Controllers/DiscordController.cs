@@ -148,7 +148,7 @@ public class DiscordController(IConfiguration configuration, IDiscordService dis
                 userList.Add(userModel);
         }
             
-        var mappedWithUsers = new ApiDiscordConnectionWithUsers
+        return Ok(new ApiDiscordConnectionWithUsers
         {
             DiscordConnectionId = mapped.DiscordConnectionId,
             DiscordSnowflake = mapped.DiscordSnowflake,
@@ -156,10 +156,48 @@ public class DiscordController(IConfiguration configuration, IDiscordService dis
             DiscordUsername = mapped.DiscordUsername,
             UpdatedOn = mapped.UpdatedOn,
             CreatedOn = mapped.CreatedOn
-        };
-        return Ok(mappedWithUsers);
+        });
     }
-    
+
+    [Authorize(Roles = "Discord.Write")]
+    [HttpPost("connections/{discordConnectionId:long}/refresh")]
+    [ProducesResponseType(typeof(ApiDiscordConnection), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiDiscordConnectionWithUsers), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status502BadGateway)]
+    public async Task<IActionResult> RefreshDiscordConnectionData(long discordConnectionId, [FromQuery] bool includeUsers = false)
+    {
+        var refreshResult = await discordApi.RefreshDiscordConnectionData(discordConnectionId);
+        if (!refreshResult.TryGetDataNonNull(out var connection))
+            return Problem(statusCode: refreshResult.GetStatusCodeInt(), detail: refreshResult.ErrorMessage);
+
+        var mapped = ApiDiscordConnection.FromModel(connection);
+
+        if (!includeUsers) return Ok(mapped);
+
+        var userConnectionsResult = await discordService.GetUsersByDiscordConnectionId(discordConnectionId);
+        if (!userConnectionsResult.TryGetDataNonNull(out var userConnectionsEnum))
+            return Problem(statusCode: userConnectionsResult.GetStatusCodeInt(), detail: userConnectionsResult.ErrorMessage);
+
+        var userList = new List<User>();
+        foreach (var uconn in userConnectionsEnum)
+        {
+            var userResult = await userService.GetUserByUserId(uconn.UserId);
+            if (userResult.TryGetDataNonNull(out var userModel))
+                userList.Add(userModel);
+        }
+
+        return Ok(new ApiDiscordConnectionWithUsers
+        {
+            DiscordConnectionId = mapped.DiscordConnectionId,
+            DiscordSnowflake = mapped.DiscordSnowflake,
+            DiscordUsername = mapped.DiscordUsername,
+            UpdatedOn = mapped.UpdatedOn,
+            CreatedOn = mapped.CreatedOn,
+            Users = userList
+        });
+    }
+
     [Authorize(Roles = "Discord.Read")]
     [HttpGet("snowflakes/{discordSnowflake}")]
     [ProducesResponseType(typeof(ApiDiscordConnection), StatusCodes.Status200OK)]

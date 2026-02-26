@@ -140,7 +140,7 @@ public class PatreonController(IConfiguration configuration, IPatreonService pat
             return Problem(statusCode: patreonConnectionResult.GetStatusCodeInt(),
                 detail: patreonConnectionResult.ErrorMessage);
 
-        if (!includeUsers) return Ok(patreonConnection);
+        if (!includeUsers) return Ok(ApiPatreonConnection.FromModel(patreonConnection));
 
         var userConnectionsResult = await patreonService.GetUsersByPatreonConnectionId(patreonConnectionId);
         if (!userConnectionsResult.TryGetDataNonNull(out var userConnectionsEnum))
@@ -157,7 +157,7 @@ public class PatreonController(IConfiguration configuration, IPatreonService pat
                 userList.Add(userModel);
         }
 
-        var mappedWithUsers = new ApiPatreonConnectionWithUsers
+        return Ok(new ApiPatreonConnectionWithUsers
         {
             PatreonConnectionId = patreonConnection.PatreonConnectionId,
             Users = userList,
@@ -165,7 +165,46 @@ public class PatreonController(IConfiguration configuration, IPatreonService pat
             CreatedOn = patreonConnection.CreatedOn,
             FullName = patreonConnection.FullName,
             Pledge = patreonConnection.Pledge
-        };
-        return Ok(mappedWithUsers);
+        });
+    }
+
+    [Authorize(Roles = "Patreon.Write")]
+    [HttpPost("connections/{patreonConnectionId:long}/refresh")]
+    [ProducesResponseType(typeof(ApiPatreonConnection), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiPatreonConnectionWithUsers), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status502BadGateway)]
+    public async Task<IActionResult> RefreshPatreonConnectionData([FromRoute] long patreonConnectionId,
+        [FromQuery] bool includeUsers = false)
+    {
+        var refreshResult = await patreonApi.RefreshPatreonConnectionData(patreonConnectionId);
+        if (!refreshResult.TryGetDataNonNull(out var connection))
+            return Problem(statusCode: refreshResult.GetStatusCodeInt(), detail: refreshResult.ErrorMessage);
+
+        var mapped = ApiPatreonConnection.FromModel(connection);
+
+        if (!includeUsers) return Ok(mapped);
+
+        var userConnectionsResult = await patreonService.GetUsersByPatreonConnectionId(patreonConnectionId);
+        if (!userConnectionsResult.TryGetDataNonNull(out var userConnectionsEnum))
+            return Problem(statusCode: userConnectionsResult.GetStatusCodeInt(), detail: userConnectionsResult.ErrorMessage);
+
+        var userList = new List<User>();
+        foreach (var uconn in userConnectionsEnum)
+        {
+            var userResult = await userService.GetUserByUserId(uconn.UserId);
+            if (userResult.TryGetDataNonNull(out var userModel))
+                userList.Add(userModel);
+        }
+
+        return Ok(new ApiPatreonConnectionWithUsers
+        {
+            PatreonConnectionId = mapped.PatreonConnectionId,
+            FullName = mapped.FullName,
+            Pledge = mapped.Pledge,
+            UpdatedOn = mapped.UpdatedOn,
+            CreatedOn = mapped.CreatedOn,
+            Users = userList
+        });
     }
 }

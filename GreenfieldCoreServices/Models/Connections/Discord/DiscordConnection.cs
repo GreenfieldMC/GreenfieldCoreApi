@@ -7,6 +7,7 @@ public record DiscordConnection : IModelConvertable<DiscordConnectionEntity, Dis
     
     public required long DiscordConnectionId { get; init; }
     public required string RefreshToken { get; init; }
+    public required string AccessToken { get; init; }
     public required DateTime RefreshBy { get; init; }
     public required DateTime? UpdatedOn { get; init; }
     public required DateTime CreatedOn { get; init; }
@@ -20,6 +21,7 @@ public record DiscordConnection : IModelConvertable<DiscordConnectionEntity, Dis
         {
             DiscordConnectionId = from.DiscordConnectionId,
             RefreshToken = from.RefreshToken,
+            AccessToken = from.AccessToken,
             RefreshBy = from.TokenExpiry,
             UpdatedOn = from.UpdatedOn,
             CreatedOn = from.CreatedOn,

@@ -193,4 +193,29 @@ public class PatreonApi(ILogger<IPatreonApi> logger, IConfiguration configuratio
         _cachedCampaignId = foundCampaign.Id;
         return Result<string>.Success(foundCampaign.Id);
     }
+
+    public async Task<Result<PatreonConnection>> RefreshPatreonConnectionData(long patreonConnectionId)
+    {
+        var connectionResult = await patreonService.GetPatreonConnection(patreonConnectionId);
+        if (!connectionResult.TryGetDataNonNull(out var connection))
+            return Result<PatreonConnection>.Failure(connectionResult.ErrorMessage!, connectionResult.StatusCode);
+
+        if (connection.RefreshBy <= DateTime.UtcNow)
+            return Result<PatreonConnection>.Failure(
+                "The Patreon access token for this connection has expired. The user must re-link their Patreon account.",
+                HttpStatusCode.FailedDependency);
+
+        var identityResult = await GetPatreonIdentity(connection.AccessToken);
+        if (!identityResult.TryGetDataNonNull(out var identityData))
+            return Result<PatreonConnection>.Failure(identityResult.ErrorMessage!, identityResult.StatusCode);
+
+        var campaignIdResult = await ResolveCampaignId();
+        if (!campaignIdResult.TryGetDataNonNull(out var campaignId))
+            return Result<PatreonConnection>.Failure(campaignIdResult.ErrorMessage!, campaignIdResult.StatusCode);
+
+        var pledge = identityData.GetPledgedAmountOfCampaign(campaignId);
+        var fullName = identityData.Data.Attributes?.FullName ?? connection.FullName;
+
+        return await patreonService.UpdatePatreonConnectionProfile(patreonConnectionId, fullName, pledge);
+    }
 }

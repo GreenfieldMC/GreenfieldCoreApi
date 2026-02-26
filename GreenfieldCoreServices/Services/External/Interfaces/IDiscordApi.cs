@@ -34,4 +34,12 @@ public interface IDiscordApi
     /// <param name="userId">Internal user ID to link.</param>
     /// <param name="code">Discord authorization code.</param>
     Task<Result<UserDiscordConnection>> LinkDiscordAccountToUser(long userId, string code);
+
+    /// <summary>
+    /// Fetches the latest profile data (username) from the Discord identity API using the
+    /// stored access token and persists the updated value to the connection record.
+    /// Returns 424 Failed Dependency if the stored access token is expired.
+    /// </summary>
+    /// <param name="discordConnectionId">The internal Discord connection ID to refresh.</param>
+    Task<Result<DiscordConnection>> RefreshDiscordConnectionData(long discordConnectionId);
 }
