@@ -71,6 +71,6 @@ public class UserService(IUnitOfWork uow, ICacheService<long, User> userCache) :
     private bool IsValidUsername(string username)
     {
         if (string.IsNullOrWhiteSpace(username)) return false;
-        return username.Length is >= 3 and <= 16 && username.All(char.IsLetterOrDigit);
+        return username.Length is >= 3 and <= 16 && username.All(c => char.IsLetterOrDigit(c) ||  c == '_');
     }
 }
