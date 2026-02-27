@@ -470,7 +470,7 @@ public static class StoredProcs
         /// <summary>
         /// Inserts a new build code.
         /// </summary>
-        public static readonly ParameterizedQuerySingleProcedure<BuildCodeEntity?, (int listOrder, string buildCode)> InsertCode = new("`BuildCodes.usp_InsertBuildCode`", (args, parms) =>
+        public static readonly ParameterizedQuerySingleProcedure<BuildCodeEntity?, (int listOrder, string buildCode)> InsertCode = new("`BuildCodes.usp_InsertCode`", (args, parms) =>
         {
             parms.Add("p_ListOrder", args.listOrder, DbType.Int32);
             parms.Add("p_BuildCode", args.buildCode, DbType.String, size: 4096);
