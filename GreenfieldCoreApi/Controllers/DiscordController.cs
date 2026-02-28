@@ -202,9 +202,12 @@ public class DiscordController(IConfiguration configuration, IDiscordService dis
     [HttpGet("snowflakes/{discordSnowflake}")]
     [ProducesResponseType(typeof(ApiDiscordConnection), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> GetDiscordConnectionBySnowflake(ulong discordSnowflake, [FromQuery] bool includeUsers = false)
+    public async Task<IActionResult> GetDiscordConnectionBySnowflake(string discordSnowflake, [FromQuery] bool includeUsers = false)
     {
-        var connectionResult = await discordService.GetDiscordConnectionBySnowflake(discordSnowflake);
+        if (!ulong.TryParse(discordSnowflake, out var parsedSnowflake))
+            return Problem(statusCode: StatusCodes.Status400BadRequest, detail: "Invalid Discord snowflake format.");
+        
+        var connectionResult = await discordService.GetDiscordConnectionBySnowflake(parsedSnowflake);
         if (!connectionResult.TryGetDataNonNull(out var connection))
             return Problem(statusCode: connectionResult.GetStatusCodeInt(), detail: connectionResult.ErrorMessage);
         var mapped = ApiDiscordConnection.FromModel(connection);
