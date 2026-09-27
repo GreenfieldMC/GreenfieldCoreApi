@@ -36,6 +36,13 @@ public interface IUserService
     public Task<Result<User>> GetUserByUserId(long userId);
     
     /// <summary>
+    /// Get a user by their Minecraft username. This method will NOT refresh the database for up-to-date usernames UNLESS there is a collision of usernames.
+    /// </summary>
+    /// <param name="username">The username of the user to find.</param>
+    /// <returns>The user if found; a failed Result if no user was found with the given Username.</returns>
+    public Task<Result<User>> GetUserByUsername(string username);
+    
+    /// <summary>
     /// Updates a user's Minecraft username.
     /// </summary>
     /// <param name="minecraftUuid">The Minecraft UUID of the user to update</param>

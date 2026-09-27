@@ -120,6 +120,34 @@ public class UserService(IUnitOfWork uow, ICacheService<long, User> userCache, I
         return foundUser is null ? Result<User>.Failure("User not found.", HttpStatusCode.NotFound) : Result<User>.Success(User.FromModel(foundUser));
     }
 
+    public async Task<Result<User>> GetUserByUsername(string username)
+    {
+        if (!IsValidUsername(username))
+            return Result<User>.Failure("A valid username must be provided.");
+        
+        var repo = uow.Repository<IUserRepository>();
+        var result = await repo.SelectUsersByUsername(username);
+        if (!result.TryGetDataNonNull(out var users))
+            return Result<User>.Failure(result.ErrorMessage ?? "Failed to retrieve users by username.");
+        
+        var userList = users.Select(User.FromModel).ToList();
+
+        if (userList.Count > 1)
+        {
+            var refreshResult = await RefreshUsernames(userList.Select(u => u.UserId));
+            if (!refreshResult.TryGetDataNonNull(out var refreshedUsers))
+                return Result<User>.Failure(refreshResult.ErrorMessage ?? "Failed to refresh usernames for collision resolution.");
+            
+            userList = refreshedUsers.ToList();
+            if (userList.Count > 1)
+                return Result<User>.Failure("Multiple users found with the same username after refresh. Collision resolution failed.", HttpStatusCode.Conflict);
+        }
+        
+        return userList.Count == 0 
+            ? Result<User>.Failure("User not found.", HttpStatusCode.NotFound) 
+            : Result<User>.Success(userList[0]);
+    }
+
     public async Task<Result<IEnumerable<User>>> UpdateUsername(Guid minecraftUuid, string newUsername)
     {
         // Guid.Empty is the System user, can skip validation.

@@ -69,6 +69,20 @@ public class UserController(IUserService userService, IPatreonService patreonSer
             ? Ok(userResult.GetNonNullOrThrow())
             : Problem(statusCode: userResult.GetStatusCodeInt(), detail: userResult.ErrorMessage);
     }
+
+    [HttpGet("username/{username}")]
+    [Authorize(Roles = "Users.Read,Users")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [Produces(typeof(GreenfieldCoreServices.Models.Users.User))]
+    public async Task<IActionResult> GetUserByUsername(string username)
+    {
+        var userResult = await userService.GetUserByUsername(username);
+        return userResult.IsSuccessful
+            ? Ok(userResult.GetNonNullOrThrow())
+            : Problem(statusCode: userResult.GetStatusCodeInt(), detail: userResult.ErrorMessage);
+    }
     
     /// <summary>
     /// Updates a user's Minecraft username.
