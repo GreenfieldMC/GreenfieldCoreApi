@@ -14,6 +14,7 @@ using GreenfieldCoreServices.Models.Connections.Discord;
 using GreenfieldCoreServices.Models.Connections.Patreon;
 using GreenfieldCoreServices.Models.Discord;
 using GreenfieldCoreServices.Models.Patreon;
+using GreenfieldCoreServices.Models.Redblocks;
 using GreenfieldCoreServices.Models.Resources;
 using GreenfieldCoreServices.Models.Users;
 using GreenfieldCoreServices.Services;
@@ -65,6 +66,7 @@ public static class Startup
         services.AddTransient<IDiscordConnectionRepository, DiscordConnectionRepository>();
         services.AddTransient<ICodeRepository, CodeRepository>();
         services.AddTransient<IApplicationRepository, ApplicationRepository>();
+        services.AddTransient<IRedblockRepository, RedblockRepository>();
     }
     
     internal static void ConfigureScheduledTasks(this IServiceCollection services)
@@ -87,9 +89,11 @@ public static class Startup
         services.AddTransient<IClientAuthService, ClientAuthService>();
         services.AddTransient<ICodeService, CodeService>();
         services.AddTransient<IBuilderApplicationService, BuilderApplicationService>();
+        services.AddTransient<IRedblockService, RedblockService>();
         services.AddHttpClient<IPatreonApi, PatreonApi>(client => { client.BaseAddress = new Uri("https://www.patreon.com/api/oauth2/"); });
         services.AddHttpClient<IDiscordApi, DiscordApi>(client => { client.BaseAddress = new Uri("https://discord.com"); });
         services.AddHttpClient<IGitHubApi, GitHubApi>(client => { client.BaseAddress = new Uri("https://api.github.com"); });
+        services.AddHttpClient<IMojangApi, MojangApi>(client => { client.BaseAddress = new Uri("https://sessionserver.mojang.com"); });
 
         services.AddTransient<IResourcePackService, ResourcePackService>();
         services.AddSingleton<TaskStartSignalService>();
@@ -111,6 +115,8 @@ public static class Startup
         services.AddSingleton<ICacheService<(long userId, long discordConnectionId), DiscordDisconnectState>, DiscordDisconnectStateCache>();
         services.AddSingleton<ICacheService<string, ResourcePackCacheEntry>, ResourcePackCacheService>();
         services.AddSingleton<ICacheService<Guid, DownloadToken>, DownloadTokenCacheService>();
+        services.AddSingleton<ICacheService<string, RedblockProject>, RedblockProjectCache>();
+        services.AddSingleton<ICacheService<string, Redblock>, RedblockCache>();
     }
 
     internal static void ConfigureConfiguration(this IConfigurationBuilder configBuilder, IWebHostEnvironment env)
@@ -195,7 +201,7 @@ public static class Startup
         
         app.MapOpenApi();
         app.MapScalarApiReference(options => options
-            .WithLayout(ScalarLayout.Classic)
+            .WithClassicLayout()
             .WithTitle("Greenfield Core API (" + app.Environment.EnvironmentName + ")")
             .AddPreferredSecuritySchemes("OAuth2")
             .AddClientCredentialsFlow("OAuth2", flow =>
@@ -203,7 +209,8 @@ public static class Startup
                     flow.TokenUrl = "/api/v1.0/login/token";
                     flow.CredentialsLocation = CredentialsLocation.Body;
                 })
-            .WithPersistentAuthentication()
+            .WithTheme(ScalarTheme.Moon)
+            .EnablePersistentAuthentication()
         );
         app.UseAuthentication();
         app.UseAuthorization();

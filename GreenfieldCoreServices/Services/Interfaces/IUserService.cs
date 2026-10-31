@@ -15,6 +15,13 @@ public interface IUserService
     public Task<Result<User>> CreateUser(Guid minecraftUuid, string username);
     
     /// <summary>
+    /// Bulk imports users in a single service call.
+    /// </summary>
+    /// <param name="users">The users to attempt to create.</param>
+    /// <returns>A result containing created and skipped UUIDs.</returns>
+    public Task<Result<BulkImportUsersResult>> BulkImportUsers(IEnumerable<BulkImportUserEntry> users);
+
+    /// <summary>
     /// Get a user by their Minecraft UUID
     /// </summary>
     /// <param name="minecraftUuid">The Minecraft UUID of the user to retrieve</param>
@@ -29,11 +36,41 @@ public interface IUserService
     public Task<Result<User>> GetUserByUserId(long userId);
     
     /// <summary>
+    /// Get a user by their Minecraft username. This method will NOT refresh the database for up-to-date usernames UNLESS there is a collision of usernames.
+    /// </summary>
+    /// <param name="username">The username of the user to find.</param>
+    /// <returns>The user if found; a failed Result if no user was found with the given Username.</returns>
+    public Task<Result<User>> GetUserByUsername(string username);
+    
+    /// <summary>
     /// Updates a user's Minecraft username.
     /// </summary>
     /// <param name="minecraftUuid">The Minecraft UUID of the user to update</param>
     /// <param name="newUsername">The new Minecraft username to set</param>
-    /// <returns>The updated User if an update was performed; a failed Result otherwise.</returns>
-    public Task<Result<User>> UpdateUsername(Guid minecraftUuid, string newUsername);
-    
+    /// <returns>All users updated as part of the operation (target and collision updates).</returns>
+    public Task<Result<IEnumerable<User>>> UpdateUsername(Guid minecraftUuid, string newUsername);
+
+    /// <summary>
+    /// Refreshes usernames for the provided user IDs using Mojang profile data.
+    /// Returns only users whose usernames were updated in the database.
+    /// </summary>
+    /// <param name="userIds">The user IDs to refresh.</param>
+    /// <returns>All users updated as part of the refresh operation.</returns>
+    public Task<Result<IEnumerable<User>>> RefreshUsernames(IEnumerable<long> userIds);
+
+    /// <summary>
+    /// Gets all users, with an option to skip the cache and query the database directly.
+    /// When <paramref name="skipCache"/> is false and the cache is populated, returns cached users.
+    /// When <paramref name="skipCache"/> is true, queries the database, repopulates the cache, and returns fresh results.
+    /// </summary>
+    /// <param name="skipCache">If true, bypasses the cache and queries the database directly, repopulating the cache with the results.</param>
+    /// <returns>All users.</returns>
+    public Task<Result<IEnumerable<User>>> GetAllUsers(bool skipCache = false);
+
+    /// <summary>
+    /// Gets the system user, which is used for actions performed by the system rather than a specific user. This user has a Minecraft UUID of Guid.Empty and a username of "##System##".
+    /// </summary>
+    /// <returns></returns>
+    public Task<Result<User>> GetSystemUser();
+
 }

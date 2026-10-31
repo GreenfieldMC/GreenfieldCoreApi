@@ -1,0 +1,221 @@
+using GreenfieldCoreDataAccess.Database.Models;
+using GreenfieldCoreDataAccess.Database.UnitOfWork;
+
+namespace GreenfieldCoreDataAccess.Database.Repositories.Interfaces;
+
+/// <summary>
+/// Repository methods for working with Redblock projects, redblocks, statuses, and assignments.
+/// </summary>
+public interface IRedblockRepository
+{
+    /// <summary>
+    /// Create a new Redblock project.
+    /// </summary>
+    /// <param name="projectName">The display name of the project to create.</param>
+    /// <param name="projectKey">The short key used to identify the project.</param>
+    /// <returns>Result containing the created <see cref="RedblockProjectEntity"/>, or a failed Result if no row was returned.</returns>
+    Task<Result<RedblockProjectEntity>> InsertProject(string projectName, string projectKey);
+
+    /// <summary>
+    /// Update the name of an existing Redblock project.
+    /// </summary>
+    /// <param name="projectId">The internal project ID of the project to update.</param>
+    /// <param name="projectName">The new project name to set.</param>
+    /// <returns>Result containing the updated <see cref="RedblockProjectEntity"/>, or a failed Result if the project was not found.</returns>
+    Task<Result<RedblockProjectEntity>> UpdateProject(long projectId, string projectName);
+
+    /// <summary>
+    /// Get all Redblock projects.
+    /// </summary>
+    /// <returns>Result containing all <see cref="RedblockProjectEntity"/> entries.</returns>
+    Task<Result<IEnumerable<RedblockProjectEntity>>> SelectProjects();
+
+    /// <summary>
+    /// Get a Redblock project by its internal project ID.
+    /// </summary>
+    /// <param name="projectId">The internal project ID of the project to retrieve.</param>
+    /// <returns>Result containing the <see cref="RedblockProjectEntity"/> if found, or a failed Result if no project was found with the given ID.</returns>
+    Task<Result<RedblockProjectEntity>> SelectProjectById(long projectId);
+    
+    /// <summary>
+    /// Get a Redblock project by its key.
+    /// </summary>
+    /// <param name="projectKey">The key of the project to retrieve.</param>
+    /// <returns>Result containing the <see cref="RedblockProjectEntity"/> if found, or a failed Result if no project was found with the given key.</returns>
+    Task<Result<RedblockProjectEntity>> SelectProjectByKey(string projectKey);
+
+    /// <summary>
+    /// Create a new Redblock in a project.
+    /// </summary>
+    /// <param name="projectId">The project ID that the Redblock belongs to.</param>
+    /// <param name="message">The Redblock message or description.</param>
+    /// <param name="x">The X coordinate of the Redblock.</param>
+    /// <param name="y">The Y coordinate of the Redblock.</param>
+    /// <param name="z">The Z coordinate of the Redblock.</param>
+    /// <param name="createdBy">The internal user ID of the user creating the Redblock.</param>
+    /// <returns>Result containing the created <see cref="RedblockEntity"/>, or a failed Result if no row was returned.</returns>
+    Task<Result<RedblockEntity>> InsertRedblock(long projectId, string message, int x, int y, int z, long createdBy);
+
+    /// <summary>
+    /// Get a Redblock by its internal Redblock ID.
+    /// </summary>
+    /// <param name="redblockId">The internal Redblock ID to retrieve.</param>
+    /// <returns>Result containing the <see cref="RedblockEntity"/> if found, or a failed Result if no Redblock was found.</returns>
+    Task<Result<RedblockWithLatestStatusEntity>> SelectRedblockById(long redblockId);
+
+    /// <summary>
+    /// Get a Redblock by project ID and Redblock key number.
+    /// </summary>
+    /// <param name="projectId">The project ID that the Redblock belongs to.</param>
+    /// <param name="keyNumber">The Redblock key number within the project.</param>
+    /// <returns>Result containing the <see cref="RedblockEntity"/> if found, or a failed Result if no Redblock was found.</returns>
+    Task<Result<RedblockWithLatestStatusEntity>> SelectRedblockByKey(long projectId, long keyNumber);
+
+    /// <summary>
+    /// Get Redblocks by project ID with optional filtering by status, deletion status, user assignments, role assignments, and message content.
+    /// </summary>
+    /// <param name="projectId"></param>
+    /// <param name="location"></param>
+    /// <param name="radius"></param>
+    /// <param name="statuses"></param>
+    /// <param name="statusFilterMatchType"></param>
+    /// <param name="deletionUserIds"></param>
+    /// <param name="deletionFilterMatchType"></param>
+    /// <param name="userAssignmentUserIds"></param>
+    /// <param name="userAssignmentFilterMatchType"></param>
+    /// <param name="roleAssignmentRoleNames"></param>
+    /// <param name="roleAssignmentFilterMatchType"></param>
+    /// <param name="messageFilter"></param>
+    /// <param name="messageFilterMatchType"></param>
+    /// <param name="resultsPerPage"></param>
+    /// <param name="currentPage"></param>
+    /// <returns></returns>
+    Task<Result<(IEnumerable<RedblockWithLatestStatusEntity> Redblocks, long TotalResults)>> SelectRedblocksByProject(
+        long projectId,
+        Location? location,
+        long? radius,
+        List<string> statuses,
+        string? statusFilterMatchType,
+        List<long> deletionUserIds,
+        string? deletionFilterMatchType,
+        List<long> userAssignmentUserIds,
+        string? userAssignmentFilterMatchType,
+        List<string> roleAssignmentRoleNames,
+        string? roleAssignmentFilterMatchType,
+        string messageFilter,
+        string? messageFilterMatchType, int resultsPerPage, long currentPage);
+
+    /// <summary>
+    /// Get all status rows for a Redblock by its internal Redblock ID.
+    /// </summary>
+    /// <param name="redblockId">The internal Redblock ID.</param>
+    /// <returns>Result containing matching <see cref="RedblockStatusEntity"/> rows.</returns>
+    Task<Result<IEnumerable<RedblockStatusEntity>>> SelectRedblockStatuses(long redblockId);
+
+    /// <summary>
+    /// Get all user assignments for a Redblock by its internal Redblock ID.
+    /// </summary>
+    /// <param name="redblockId">The internal Redblock ID.</param>
+    /// <returns>Result containing matching <see cref="RedblockUserAssignmentEntity"/> rows.</returns>
+    Task<Result<IEnumerable<RedblockUserAssignmentEntity>>> SelectRedblockUserAssignments(long redblockId);
+
+    /// <summary>
+    /// Get all role assignments for a Redblock by its internal Redblock ID.
+    /// </summary>
+    /// <param name="redblockId">The internal Redblock ID.</param>
+    /// <returns>Result containing matching <see cref="RedblockRoleAssignmentEntity"/> rows.</returns>
+    Task<Result<IEnumerable<RedblockRoleAssignmentEntity>>> SelectRedblockRoleAssignments(long redblockId);
+
+    /// <summary>
+    /// Get all entity GUID mappings for a Redblock by its internal Redblock ID.
+    /// </summary>
+    /// <param name="redblockId">The internal Redblock ID.</param>
+    /// <returns>Result containing the GUIDs of the entities associated with the Redblock.</returns>
+    Task<Result<IEnumerable<Guid>>> SelectRedblockEntities(long redblockId);
+
+    /// <summary>
+    /// Update a Redblock's message.
+    /// </summary>
+    /// <param name="projectId">The project ID that the Redblock belongs to.</param>
+    /// <param name="keyNumber">The Redblock key number within the project.</param>
+    /// <param name="message">The new message to set.</param>
+    /// <param name="updatedBy"></param>
+    /// <returns>Result containing the updated <see cref="RedblockEntity"/>, or a failed Result if no Redblock was found.</returns>
+    Task<Result<RedblockWithLatestStatusEntity>> UpdateRedblockMessage(long projectId, long keyNumber, string message,
+        long updatedBy);
+
+    /// <summary>
+    /// Soft delete a Redblock.
+    /// </summary>
+    /// <param name="projectId">The project ID that the Redblock belongs to.</param>
+    /// <param name="keyNumber">The Redblock key number within the project.</param>
+    /// <param name="deletedBy">The internal user ID of the user performing the delete.</param>
+    /// <returns>Result containing the updated <see cref="RedblockEntity"/>, or a failed Result if no Redblock was found.</returns>
+    Task<Result<RedblockWithLatestStatusEntity>> SoftDeleteRedblock(long projectId, long keyNumber, long deletedBy);
+
+    /// <summary>
+    /// Add a status entry to a Redblock.
+    /// </summary>
+    /// <param name="projectId">The project ID that the Redblock belongs to.</param>
+    /// <param name="keyNumber">The Redblock key number within the project.</param>
+    /// <param name="status">The status value to add.</param>
+    /// <param name="createdBy">The internal user ID of the user creating the status entry.</param>
+    /// <returns>Result containing the created <see cref="RedblockStatusEntity"/>, or a failed Result if no row was returned.</returns>
+    Task<Result<RedblockStatusEntity>> InsertStatus(long projectId, long keyNumber, string status, long createdBy);
+
+    /// <summary>
+    /// Add a user assignment to a Redblock.
+    /// </summary>
+    /// <param name="projectId">The project ID that the Redblock belongs to.</param>
+    /// <param name="keyNumber">The Redblock key number within the project.</param>
+    /// <param name="assignedTo">The internal user ID being assigned to the Redblock.</param>
+    /// <param name="createdBy">The internal user ID of the user creating the assignment.</param>
+    /// <returns>Result containing the created <see cref="RedblockUserAssignmentEntity"/>, or a failed Result if no row was returned.</returns>
+    Task<Result<RedblockUserAssignmentEntity>> InsertUserAssignment(long projectId, long keyNumber, long assignedTo, long createdBy);
+
+    /// <summary>
+    /// Remove a user assignment from a Redblock.
+    /// </summary>
+    /// <param name="projectId">The project ID that the Redblock belongs to.</param>
+    /// <param name="keyNumber">The Redblock key number within the project.</param>
+    /// <param name="assignedTo">The internal user ID whose assignment should be removed.</param>
+    /// <returns>Result indicating whether a user assignment was removed.</returns>
+    Task<Result> DeleteUserAssignment(long projectId, long keyNumber, long assignedTo);
+
+    /// <summary>
+    /// Add a role assignment to a Redblock.
+    /// </summary>
+    /// <param name="projectId">The project ID that the Redblock belongs to.</param>
+    /// <param name="keyNumber">The Redblock key number within the project.</param>
+    /// <param name="roleName">The role name to assign to the Redblock.</param>
+    /// <param name="createdBy">The internal user ID of the user creating the assignment.</param>
+    /// <returns>Result containing the created <see cref="RedblockRoleAssignmentEntity"/>, or a failed Result if no row was returned.</returns>
+    Task<Result<RedblockRoleAssignmentEntity>> InsertRoleAssignment(long projectId, long keyNumber, string roleName, long createdBy);
+
+    /// <summary>
+    /// Remove a role assignment from a Redblock.
+    /// </summary>
+    /// <param name="projectId">The project ID that the Redblock belongs to.</param>
+    /// <param name="keyNumber">The Redblock key number within the project.</param>
+    /// <param name="roleName">The role name whose assignment should be removed.</param>
+    /// <returns>Result indicating whether a role assignment was removed.</returns>
+    Task<Result> DeleteRoleAssignment(long projectId, long keyNumber, string roleName);
+
+    /// <summary>
+    /// Add an entity GUID mapping to a Redblock.
+    /// </summary>
+    /// <param name="projectId">The project ID that the Redblock belongs to.</param>
+    /// <param name="keyNumber">The Redblock key number within the project.</param>
+    /// <param name="entityGuid">The entity GUID to associate with the Redblock.</param>
+    /// <returns>Result indicating whether the operation succeeded.</returns>
+    Task<Result> InsertRedblockEntity(long projectId, long keyNumber, Guid entityGuid);
+
+    /// <summary>
+    /// Remove all entity GUID mappings from a Redblock.
+    /// </summary>
+    /// <param name="projectId">The project ID that the Redblock belongs to.</param>
+    /// <param name="keyNumber">The Redblock key number within the project.</param>
+    /// <returns>Result indicating whether the operation succeeded.</returns>
+    Task<Result> DeleteRedblockEntities(long projectId, long keyNumber);
+}
+
