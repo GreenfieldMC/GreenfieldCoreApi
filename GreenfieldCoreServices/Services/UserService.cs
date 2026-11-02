@@ -150,9 +150,12 @@ public class UserService(IUnitOfWork uow, ICacheService<long, User> userCache, I
 
     public async Task<Result<IEnumerable<User>>> UpdateUsername(Guid minecraftUuid, string newUsername)
     {
-        // Guid.Empty is the System user, can skip validation.
-        if (!IsValidUsername(newUsername) && minecraftUuid != Guid.Empty)
-            return Result<IEnumerable<User>>.Failure("A valid new username must be provided.");
+        // Guid.Empty is the System user, which bypasses the standard Minecraft username rules and only requires no whitespace.
+        var isSystemUser = minecraftUuid == Guid.Empty;
+        if (isSystemUser ? !IsValidSystemUsername(newUsername) : !IsValidUsername(newUsername))
+            return Result<IEnumerable<User>>.Failure(isSystemUser
+                ? "A valid new system username must be provided. System usernames must not be empty or contain whitespace."
+                : "A valid new username must be provided.");
 
         var repo = uow.Repository<IUserRepository>();
 
@@ -285,6 +288,11 @@ public class UserService(IUnitOfWork uow, ICacheService<long, User> userCache, I
     {
         if (string.IsNullOrWhiteSpace(username)) return false;
         return username.Length is >= 3 and <= 16 && username.All(c => char.IsLetterOrDigit(c) ||  c == '_');
+    }
+
+    private static bool IsValidSystemUsername(string username)
+    {
+        return !string.IsNullOrEmpty(username) && !username.Any(char.IsWhiteSpace);
     }
     
 }
