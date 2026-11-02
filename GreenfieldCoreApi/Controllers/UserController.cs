@@ -35,6 +35,23 @@ public class UserController(IUserService userService, IPatreonService patreonSer
     }
 
     /// <summary>
+    /// Gets the system user, which is used for actions performed by the system rather than a specific user.
+    /// </summary>
+    /// <returns>The system user.</returns>
+    [HttpGet("system")]
+    [Authorize(Roles = "Users.Read,Users")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [Produces(typeof(GreenfieldCoreServices.Models.Users.User))]
+    public async Task<IActionResult> GetSystemUser()
+    {
+        var userResult = await userService.GetSystemUser();
+        return userResult.IsSuccessful
+            ? Ok(userResult.GetNonNullOrThrow())
+            : Problem(statusCode: userResult.GetStatusCodeInt(), detail: userResult.ErrorMessage);
+    }
+
+    /// <summary>
     /// Gets a user by their Minecraft UUID.
     /// </summary>
     /// <param name="minecraftUuid">The Minecraft UUID of the user.</param>
