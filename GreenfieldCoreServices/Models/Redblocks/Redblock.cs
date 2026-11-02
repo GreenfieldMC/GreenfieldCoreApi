@@ -5,6 +5,7 @@ namespace GreenfieldCoreServices.Models.Redblocks;
 public class Redblock : IModelConvertable<(RedblockEntity redblockEntity, RedblockProject project, List<RedblockStatus> statuses, List<RedblockUserAssignment> userAssignments, List<RedblockRoleAssignment> roleAssignments, List<Guid> entities), Redblock>
 {
     public required string Key { get; set; }
+    public required long KeyNumber { get; set; }
     public required string Message { get; set; }
     public required int X { get; set; }
     public required int Y { get; set; }
@@ -27,6 +28,7 @@ public class Redblock : IModelConvertable<(RedblockEntity redblockEntity, Redblo
         return new Redblock
         {
             Key = from.project.ProjectKey + "-" + from.redblockEntity.KeyNumber,
+            KeyNumber = from.redblockEntity.KeyNumber,
             Message = from.redblockEntity.Message,
             X = from.redblockEntity.X,
             Y = from.redblockEntity.Y,

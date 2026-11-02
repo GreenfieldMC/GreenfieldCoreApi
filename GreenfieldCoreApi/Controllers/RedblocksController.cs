@@ -183,7 +183,8 @@ public class RedblocksController(IRedblockService redblockService) : ControllerB
             new
             {
                 version = HttpContext.GetRequestedApiVersion()?.ToString(),
-                key = createdRedblock.Key
+                projectKey = createdRedblock.Project.ProjectKey,
+                redblockKey = createdRedblock.KeyNumber
             },
             createdRedblock);
     }
