@@ -256,7 +256,7 @@ public class RedblockRepository(IUnitOfWork uow, ILogger<IRedblockRepository> lo
         if (matchType.Equals("or", StringComparison.OrdinalIgnoreCase)) 
             return deletionUserIds.Count == 0
                 ? null //if there are no user IDs to match with "or", then we don't need to filter by deletion user at all since "or" with no values should include everything
-                : builder.Where($"AND (rb.DeletedBy IN ({inClause})) OR rb.DeletedBy IS NULL").Build();
+                : builder.Where($"AND (rb.DeletedBy IN ({inClause}) OR rb.DeletedBy IS NULL)").Build();
         
         if (matchType.Equals("not", StringComparison.OrdinalIgnoreCase))
             return deletionUserIds.Count == 0
@@ -286,24 +286,20 @@ public class RedblockRepository(IUnitOfWork uow, ILogger<IRedblockRepository> lo
         if (matchType.Equals("or", StringComparison.OrdinalIgnoreCase))
             return userIds.Count == 0
                 ? null
-                : builder.Join($"INNER JOIN `Redblocks.UserAssignments` rua ON rb.RedblockId = rua.RedblockId AND rua.AssignedTo IN ({inClause})").Build();
+                : builder.Where($"AND EXISTS (SELECT 1 FROM `Redblocks.UserAssignments` rua WHERE rua.RedblockId = rb.RedblockId AND rua.AssignedTo IN ({inClause}))").Build();
 
         // not + [] = return only redblocks with user assignments ("not empty")
         // not + [...] = return redblocks with no user assignments or user assignments that do not include any of the specified users
         if (matchType.Equals("not", StringComparison.OrdinalIgnoreCase))
             return userIds.Count == 0
-                ? builder.Join("INNER JOIN `Redblocks.UserAssignments` rua ON rb.RedblockId = rua.RedblockId").Build()
-                : builder.Join($"LEFT JOIN `Redblocks.UserAssignments` rua ON rb.RedblockId = rua.RedblockId")
-                    .Where($"AND (rua.AssignedTo NOT IN ({inClause}) OR rua.AssignedTo IS NULL)")
-                    .Build();
-        
+                ? builder.Where("AND EXISTS (SELECT 1 FROM `Redblocks.UserAssignments` rua WHERE rua.RedblockId = rb.RedblockId)").Build()
+                : builder.Where($"AND NOT EXISTS (SELECT 1 FROM `Redblocks.UserAssignments` rua WHERE rua.RedblockId = rb.RedblockId AND rua.AssignedTo IN ({inClause}))").Build();
+
         // and + [] = return redblocks with no users assigned ("empty")
         // and + [...] = return redblocks that have all the specified users assigned
         if  (matchType.Equals("and", StringComparison.OrdinalIgnoreCase))
             return userIds.Count == 0
-                ? builder.Join("LEFT JOIN `Redblocks.UserAssignments` rua ON rb.RedblockId = rua.RedblockId")
-                    .Where("AND rua.AssignedTo IS NULL")
-                    .Build()
+                ? builder.Where("AND NOT EXISTS (SELECT 1 FROM `Redblocks.UserAssignments` rua WHERE rua.RedblockId = rb.RedblockId)").Build()
                 : builder.Join($"INNER JOIN (SELECT RedblockId FROM `Redblocks.UserAssignments` WHERE AssignedTo IN ({inClause}) GROUP BY RedblockId HAVING COUNT(DISTINCT AssignedTo) = {userIds.Count}) rua ON rb.RedblockId = rua.RedblockId").Build();
         
         return null;
@@ -324,24 +320,20 @@ public class RedblockRepository(IUnitOfWork uow, ILogger<IRedblockRepository> lo
         if (matchType.Equals("or", StringComparison.OrdinalIgnoreCase))
             return roles.Count == 0
                 ? null
-                : builder.Join($"INNER JOIN `Redblocks.RoleAssignments` rra ON rb.RedblockId = rra.RedblockId AND rra.RoleName IN ({inClause})").Build();
+                : builder.Where($"AND EXISTS (SELECT 1 FROM `Redblocks.RoleAssignments` rra WHERE rra.RedblockId = rb.RedblockId AND rra.RoleName IN ({inClause}))").Build();
 
         // not + [] = return only redblocks with role assignments ("not empty")
         // not + [...] = return redblocks with no role assignments or role assignments that do not include any of the specified roles
         if (matchType.Equals("not", StringComparison.OrdinalIgnoreCase))
             return roles.Count == 0
-                ? builder.Join("INNER JOIN `Redblocks.RoleAssignments` rra ON rb.RedblockId = rra.RedblockId").Build()
-                : builder.Join("LEFT JOIN `Redblocks.RoleAssignments` rra ON rb.RedblockId = rra.RedblockId")
-                    .Where($"AND (rra.Role NOT IN ({inClause}) OR rra.RoleName IS NULL)")
-                    .Build();
+                ? builder.Where("AND EXISTS (SELECT 1 FROM `Redblocks.RoleAssignments` rra WHERE rra.RedblockId = rb.RedblockId)").Build()
+                : builder.Where($"AND NOT EXISTS (SELECT 1 FROM `Redblocks.RoleAssignments` rra WHERE rra.RedblockId = rb.RedblockId AND rra.RoleName IN ({inClause}))").Build();
 
         // and + [] = return redblocks with no roles assigned ("empty")
         // and + [...] = return redblocks that have all the specified roles assigned
         if  (matchType.Equals("and", StringComparison.OrdinalIgnoreCase))
             return roles.Count == 0
-                ? builder.Join("LEFT JOIN `Redblocks.RoleAssignments` rra ON rb.RedblockId = rra.RedblockId")
-                    .Where("AND rra.RoleName IS NULL")
-                    .Build()
+                ? builder.Where("AND NOT EXISTS (SELECT 1 FROM `Redblocks.RoleAssignments` rra WHERE rra.RedblockId = rb.RedblockId)").Build()
                 : builder.Join($"INNER JOIN (SELECT RedblockId FROM `Redblocks.RoleAssignments` WHERE RoleName IN ({inClause}) GROUP BY RedblockId HAVING COUNT(DISTINCT RoleName) = {roles.Count}) rra ON rb.RedblockId = rra.RedblockId").Build();
         
         return null;
