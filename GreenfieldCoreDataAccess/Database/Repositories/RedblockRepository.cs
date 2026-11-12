@@ -142,7 +142,7 @@ public class RedblockRepository(IUnitOfWork uow, ILogger<IRedblockRepository> lo
                          ,rb.ProjectId 
                          ,rb.KeyNumber
                          ,rb.Message
-                         ,rs_ranked.Status
+                         ,rb.CurrentStatus AS Status
                          ,rb.X
                          ,rb.Y
                          ,rb.Z
@@ -153,12 +153,6 @@ public class RedblockRepository(IUnitOfWork uow, ILogger<IRedblockRepository> lo
                          ,rb.DeletedBy
                          ,rb.DeletedOn
                          """)
-                .Join("""
-                        inner join (
-                          select rs.*, ROW_NUMBER() over (partition by rs.RedblockId order by rs.StatusId desc) as StatusNumber
-                          from `Redblocks.Statuses` rs
-                        ) rs_ranked on rb.RedblockId = rs_ranked.RedblockId and rs_ranked.StatusNumber = 1
-                      """)
                 .WithParameter("@ProjectId", projectId)
                 .Where("rb.ProjectId = @ProjectId")
                 .WithLimit(resultsPerPage)
@@ -213,8 +207,15 @@ public class RedblockRepository(IUnitOfWork uow, ILogger<IRedblockRepository> lo
 
         if (radius is null) return statementPart.Build();
 
+        // the bounding box lets the (ProjectId, X, Y, Z) index skip far away redblocks before any distances are computed,
+        // the having clause then trims the box down to the actual sphere
         statementPart.WithParameter("@Radius", radius)
             .WithParameter("@RadiusSquared", radius.Value * radius.Value)
+            .Where("""
+                   AND rb.X BETWEEN @LocationX - @Radius AND @LocationX + @Radius
+                   AND rb.Y BETWEEN @LocationY - @Radius AND @LocationY + @Radius
+                   AND rb.Z BETWEEN @LocationZ - @Radius AND @LocationZ + @Radius
+                   """)
             .Having("DistanceSquared <= @RadiusSquared");
 
         return statementPart.Build();
@@ -233,12 +234,12 @@ public class RedblockRepository(IUnitOfWork uow, ILogger<IRedblockRepository> lo
         if (matchType.Equals("or", StringComparison.OrdinalIgnoreCase))
             return statuses.Count == 0 
                 ? null
-                : builder.Where($"AND (rs_ranked.Status IS NULL OR rs_ranked.Status IN ({inClause}))").Build();
-        
+                : builder.Where($"AND (rb.CurrentStatus IS NULL OR rb.CurrentStatus IN ({inClause}))").Build();
+
         if (matchType.Equals("not", StringComparison.OrdinalIgnoreCase))
-            return statuses.Count == 0 
-                ? builder.Where("AND (rs_ranked.Status IS NOT NULL)").Build() 
-                : builder.Where($"AND (rs_ranked.Status NOT IN ({inClause}) OR rs_ranked.Status IS NULL)").Build();
+            return statuses.Count == 0
+                ? builder.Where("AND (rb.CurrentStatus IS NOT NULL)").Build()
+                : builder.Where($"AND (rb.CurrentStatus NOT IN ({inClause}) OR rb.CurrentStatus IS NULL)").Build();
         
         return null;
     }
