@@ -402,7 +402,10 @@ public class RedblockService(IUnitOfWork uow, ILogger<IRedblockService> logger, 
         
         if (searchFilter.DeletionFilter is not null && !searchFilter.DeletionFilter.MatchType.IsAnyOf("or", "not", "and"))
             return Result<RedblockSearchResult>.Failure("Deletion filter must have a match type of either 'or' or 'not' or 'and'.");
-        
+
+        if (searchFilter.DeletionFilter is not null && searchFilter.DeletionFilter.MatchType.IsAnyOf("and") && searchFilter.DeletionFilter.Users.Count > 0)
+            return Result<RedblockSearchResult>.Failure("Deletion filter cannot use the 'and' match type with users, a redblock can only be deleted by one user. Use 'and' with no users to find redblocks that are not deleted.");
+
         if (searchFilter.UserAssignmentFilter is not null && !searchFilter.UserAssignmentFilter.MatchType.IsAnyOf("or", "not", "and"))
             return Result<RedblockSearchResult>.Failure("User assignment filter must have a match type of either 'or' or 'not' or 'and'.");
         

@@ -63,6 +63,10 @@ public class StatusFilter
     
     /// <summary>
     /// How to match a redblock with a status. Supported options are "or" or "not"
+    /// <br/>- "or" + [] = no filtering
+    /// <br/>- "or" + [...] = the current status is one of the statuses
+    /// <br/>- "not" + [] = the redblock has a status
+    /// <br/>- "not" + [...] = the redblock has a status that is none of the statuses
     /// </summary>
     public required string MatchType { get; set; }
 }
@@ -79,6 +83,12 @@ public class DeletionFilter
     
     /// <summary>
     /// How to match a redblock with a deletion user. Supported options are "or", "not", "and"
+    /// <br/>- "or" + [] = no filtering
+    /// <br/>- "or" + [...] = deleted by one of the users
+    /// <br/>- "not" + [] = deleted by anyone
+    /// <br/>- "not" + [...] = deleted by anyone except the users
+    /// <br/>- "and" + [] = not deleted
+    /// <br/>- "and" + [...] = rejected, a redblock can only be deleted by one user
     /// </summary>
     public required string MatchType  { get; set; }
 }

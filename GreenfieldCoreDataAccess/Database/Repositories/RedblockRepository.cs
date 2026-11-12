@@ -231,15 +231,21 @@ public class RedblockRepository(IUnitOfWork uow, ILogger<IRedblockRepository> lo
 
         var inClause = builder.Build().JoinParameterKeys();
         
-        if (matchType.Equals("or", StringComparison.OrdinalIgnoreCase))
-            return statuses.Count == 0 
-                ? null
-                : builder.Where($"AND (rb.CurrentStatus IS NULL OR rb.CurrentStatus IN ({inClause}))").Build();
+        // a redblock has at most one current status, so a non-empty list only ever matches redblocks that have a status
 
+        // or + [] = return regardless of status
+        // or + [...] = return redblocks whose current status is any of the specified statuses
+        if (matchType.Equals("or", StringComparison.OrdinalIgnoreCase))
+            return statuses.Count == 0
+                ? null
+                : builder.Where($"AND rb.CurrentStatus IN ({inClause})").Build();
+
+        // not + [] = return only redblocks that have a status
+        // not + [...] = return redblocks that have a status other than the specified statuses
         if (matchType.Equals("not", StringComparison.OrdinalIgnoreCase))
             return statuses.Count == 0
-                ? builder.Where("AND (rb.CurrentStatus IS NOT NULL)").Build()
-                : builder.Where($"AND (rb.CurrentStatus NOT IN ({inClause}) OR rb.CurrentStatus IS NULL)").Build();
+                ? builder.Where("AND rb.CurrentStatus IS NOT NULL").Build()
+                : builder.Where($"AND rb.CurrentStatus NOT IN ({inClause})").Build();
         
         return null;
     }
@@ -254,20 +260,29 @@ public class RedblockRepository(IUnitOfWork uow, ILogger<IRedblockRepository> lo
         
         var inClause = builder.Build().JoinParameterKeys();
         
-        if (matchType.Equals("or", StringComparison.OrdinalIgnoreCase)) 
+        // a redblock has at most one deleter, so a non-empty list only ever matches deleted redblocks.
+        // redblocks that are not deleted can only be selected with an empty list ("and" + [])
+
+        // or + [] = return regardless of deletion
+        // or + [...] = return redblocks deleted by any of the specified users
+        if (matchType.Equals("or", StringComparison.OrdinalIgnoreCase))
             return deletionUserIds.Count == 0
-                ? null //if there are no user IDs to match with "or", then we don't need to filter by deletion user at all since "or" with no values should include everything
-                : builder.Where($"AND (rb.DeletedBy IN ({inClause}) OR rb.DeletedBy IS NULL)").Build();
-        
+                ? null
+                : builder.Where($"AND rb.DeletedBy IN ({inClause})").Build();
+
+        // not + [] = return only deleted redblocks
+        // not + [...] = return deleted redblocks that were not deleted by any of the specified users
         if (matchType.Equals("not", StringComparison.OrdinalIgnoreCase))
             return deletionUserIds.Count == 0
-                ? builder.Where("AND (rb.DeletedBy IS NOT NULL)").Build()
-                : builder.Where($"AND (rb.DeletedBy NOT IN ({inClause}) OR rb.DeletedBy IS NULL)").Build();
+                ? builder.Where("AND rb.DeletedBy IS NOT NULL").Build()
+                : builder.Where($"AND rb.DeletedBy NOT IN ({inClause})").Build();
 
+        // and + [] = return only redblocks that are not deleted
+        // and + [...] = rejected by the service, a redblock cannot be deleted by multiple users
         if (matchType.Equals("and", StringComparison.OrdinalIgnoreCase))
             return deletionUserIds.Count == 0
                 ? builder.Where("AND rb.DeletedBy IS NULL").Build()
-                : null; //redblocks can only have one deletion user, so "and" with multiple user IDs will not 
+                : null;
         
         return null;
     }
