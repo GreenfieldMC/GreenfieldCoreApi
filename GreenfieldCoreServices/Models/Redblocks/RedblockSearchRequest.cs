@@ -104,7 +104,15 @@ public class UserAssignmentFilter
     public required List<long> Users { get; set; } = [];
     
     /// <summary>
-    /// How to match a redblock with a user assignment user. Supported options are "or", "not", "and"
+    /// How to match a redblock with a user assignment user. Supported options are "or", "not", "and", "exact"
+    /// <br/>- "or" + [] = no filtering
+    /// <br/>- "or" + [...] = assigned to at least one of the users
+    /// <br/>- "not" + [] = has at least one user assigned
+    /// <br/>- "not" + [...] = assigned to none of the users, including redblocks with no users assigned
+    /// <br/>- "and" + [] = has no users assigned
+    /// <br/>- "and" + [...] = assigned to every one of the users, other users may also be assigned
+    /// <br/>- "exact" + [] = has no users assigned
+    /// <br/>- "exact" + [...] = assigned to every one of the users and no other users
     /// </summary>
     public required string MatchType  { get; set; }
 }
@@ -120,7 +128,15 @@ public class RoleAssignmentFilter
     public required List<string> Roles { get; set; } = [];
     
     /// <summary>
-    /// How to match a redblock with a role assignment role. Supported options are "or", "not", "and"
+    /// How to match a redblock with a role assignment role. Supported options are "or", "not", "and", "exact"
+    /// <br/>- "or" + [] = no filtering
+    /// <br/>- "or" + [...] = assigned at least one of the roles
+    /// <br/>- "not" + [] = has at least one role assigned
+    /// <br/>- "not" + [...] = assigned none of the roles, including redblocks with no roles assigned
+    /// <br/>- "and" + [] = has no roles assigned
+    /// <br/>- "and" + [...] = assigned every one of the roles, other roles may also be assigned
+    /// <br/>- "exact" + [] = has no roles assigned
+    /// <br/>- "exact" + [...] = assigned every one of the roles and no other roles
     /// </summary>
     public required string MatchType  { get; set; }
 }
