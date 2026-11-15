@@ -72,38 +72,22 @@ public interface IRedblockRepository
     Task<Result<RedblockWithLatestStatusEntity>> SelectRedblockByKey(long projectId, long keyNumber);
 
     /// <summary>
-    /// Get Redblocks by project ID with optional filtering by status, deletion status, user assignments, role assignments, and message content.
+    /// Get Redblocks by project ID, optionally limited to a radius around a location and filtered by groups of filters.
     /// </summary>
-    /// <param name="projectId"></param>
-    /// <param name="location"></param>
-    /// <param name="radius"></param>
-    /// <param name="statuses"></param>
-    /// <param name="statusFilterMatchType"></param>
-    /// <param name="deletionUserIds"></param>
-    /// <param name="deletionFilterMatchType"></param>
-    /// <param name="userAssignmentUserIds"></param>
-    /// <param name="userAssignmentFilterMatchType"></param>
-    /// <param name="roleAssignmentRoleNames"></param>
-    /// <param name="roleAssignmentFilterMatchType"></param>
-    /// <param name="messageFilter"></param>
-    /// <param name="messageFilterMatchType"></param>
-    /// <param name="resultsPerPage"></param>
-    /// <param name="currentPage"></param>
-    /// <returns></returns>
+    /// <param name="projectId">The project to search in.</param>
+    /// <param name="location">If set, results are ordered by distance from this location.</param>
+    /// <param name="radius">If set along with a location, only redblocks within this radius are returned.</param>
+    /// <param name="filterGroups">A redblock is returned if it matches at least one group (OR). Within a group every filter must match (AND). An empty list applies no filtering.</param>
+    /// <param name="resultsPerPage">Number of results per page.</param>
+    /// <param name="currentPage">The page to return, starting at 1.</param>
+    /// <returns>The page of matching redblocks and the total number of matches.</returns>
     Task<Result<(IEnumerable<RedblockWithLatestStatusEntity> Redblocks, long TotalResults)>> SelectRedblocksByProject(
         long projectId,
         Location? location,
         long? radius,
-        List<string> statuses,
-        string? statusFilterMatchType,
-        List<long> deletionUserIds,
-        string? deletionFilterMatchType,
-        List<long> userAssignmentUserIds,
-        string? userAssignmentFilterMatchType,
-        List<string> roleAssignmentRoleNames,
-        string? roleAssignmentFilterMatchType,
-        string messageFilter,
-        string? messageFilterMatchType, int resultsPerPage, long currentPage);
+        List<RedblockFilterSet> filterGroups,
+        int resultsPerPage,
+        long currentPage);
 
     /// <summary>
     /// Get all status rows for a Redblock by its internal Redblock ID.

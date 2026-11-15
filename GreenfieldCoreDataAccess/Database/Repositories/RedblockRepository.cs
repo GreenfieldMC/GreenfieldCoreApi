@@ -126,11 +126,7 @@ public class RedblockRepository(IUnitOfWork uow, ILogger<IRedblockRepository> lo
         SelectRedblocksByProject(long projectId,
             Location? location,
             long? radius,
-            List<string> statuses, string? statusFilterMatchType,
-            List<long> deletionUserIds, string? deletionFilterMatchType,
-            List<long> userAssignmentUserIds, string? userAssignmentFilterMatchType,
-            List<string> roleAssignmentRoleNames, string? roleAssignmentFilterMatchType,
-            string messageFilter, string? messageFilterMatchType,
+            List<RedblockFilterSet> filterGroups,
             int resultsPerPage, long currentPage)
     {
         try
@@ -158,20 +154,8 @@ public class RedblockRepository(IUnitOfWork uow, ILogger<IRedblockRepository> lo
                 .WithLimit(resultsPerPage)
                 .WithOffset(resultsPerPage * (currentPage - 1));
 
-            var statusStatementPart = BuildStatusStatementParts(statuses, statusFilterMatchType);
-            if (statusStatementPart != null) statementBuilder.WithPart(statusStatementPart);
-
-            var deletionStatementPart = BuildDeletionStatementParts(deletionUserIds, deletionFilterMatchType);
-            if (deletionStatementPart != null) statementBuilder.WithPart(deletionStatementPart);
-
-            var userAssignmentStatementPart = BuildUserAssignmentStatementParts(userAssignmentUserIds, userAssignmentFilterMatchType);
-            if (userAssignmentStatementPart != null) statementBuilder.WithPart(userAssignmentStatementPart);
-
-            var roleAssignmentStatementPart = BuildRoleAssignmentStatementParts(roleAssignmentRoleNames, roleAssignmentFilterMatchType);
-            if (roleAssignmentStatementPart != null) statementBuilder.WithPart(roleAssignmentStatementPart);
-
-            var messageStatementPart = BuildMessageStatementParts(messageFilter, messageFilterMatchType);
-            if (messageStatementPart != null) statementBuilder.WithPart(messageStatementPart);
+            var filterGroupsStatementPart = BuildFilterGroupsStatementPart(filterGroups);
+            if (filterGroupsStatementPart != null) statementBuilder.WithPart(filterGroupsStatementPart);
 
             var spatialStatementPart = BuildSpatialStatementParts(location, radius);
             if (spatialStatementPart != null) statementBuilder.WithPart(spatialStatementPart);
@@ -221,16 +205,53 @@ public class RedblockRepository(IUnitOfWork uow, ILogger<IRedblockRepository> lo
         return statementPart.Build();
     }
     
-    private static StatementPart? BuildStatusStatementParts(List<string> statuses, string? matchType)
+    /// <summary>
+    /// Combines the filter groups into one WHERE part: AND ((group 0) OR (group 1) OR ...), where every filter inside a group must match.
+    /// Each group's parameters are prefixed with @g{index}_ so groups using the same kind of filter don't overwrite each other's parameters.
+    /// </summary>
+    private static StatementPart? BuildFilterGroupsStatementPart(List<RedblockFilterSet> filterGroups)
+    {
+        if (filterGroups.Count == 0) return null;
+        var builder = new StatementPartBuilder();
+        var groupConditions = new List<string>();
+
+        for (var i = 0; i < filterGroups.Count; i++)
+        {
+            var group = filterGroups[i];
+            var prefix = $"@g{i}_";
+            var conditions = new[]
+            {
+                BuildStatusCondition(group.Statuses, group.StatusMatchType, prefix),
+                BuildDeletionCondition(group.DeletionUserIds, group.DeletionMatchType, prefix),
+                BuildUserAssignmentCondition(group.AssignedUserIds, group.UserAssignmentMatchType, prefix),
+                BuildRoleAssignmentCondition(group.AssignedRoles, group.RoleAssignmentMatchType, prefix),
+                BuildMessageCondition(group.MessageText, group.MessageMatchType, prefix)
+            }.OfType<StatementPart>().ToList();
+
+            // a group whose filters don't restrict anything (e.g. only "or" + []) matches every redblock, so the whole OR does too
+            if (conditions.Count == 0) return null;
+
+            groupConditions.Add($"({string.Join(" AND ", conditions.Select(c => c.WherePart))})");
+            foreach (var parameter in conditions.SelectMany(c => c.Parameters))
+                builder.WithParameter(parameter.Key, parameter.Value);
+        }
+
+        return builder.Where($"AND ({string.Join(" OR ", groupConditions)})").Build();
+    }
+
+    // The Build*Condition methods return a part whose WherePart is a bare condition (no leading AND), or null when the filter
+    // doesn't restrict anything. They never use joins, so any condition can sit on either side of an OR.
+
+    private static StatementPart? BuildStatusCondition(List<string> statuses, string? matchType, string prefix)
     {
         if (string.IsNullOrWhiteSpace(matchType)) return null;
         var builder = new StatementPartBuilder();
-        
-        foreach (var status in statuses) 
-            builder.WithIndexedParameter("@Status", status);
+
+        foreach (var status in statuses)
+            builder.WithIndexedParameter($"{prefix}Status", status);
 
         var inClause = builder.Build().JoinParameterKeys();
-        
+
         // a redblock has at most one current status, so a non-empty list only ever matches redblocks that have a status
 
         // or + [] = return regardless of status
@@ -238,28 +259,28 @@ public class RedblockRepository(IUnitOfWork uow, ILogger<IRedblockRepository> lo
         if (matchType.Equals("or", StringComparison.OrdinalIgnoreCase))
             return statuses.Count == 0
                 ? null
-                : builder.Where($"AND rb.CurrentStatus IN ({inClause})").Build();
+                : builder.Where($"rb.CurrentStatus IN ({inClause})").Build();
 
         // not + [] = return only redblocks that have a status
         // not + [...] = return redblocks that have a status other than the specified statuses
         if (matchType.Equals("not", StringComparison.OrdinalIgnoreCase))
             return statuses.Count == 0
-                ? builder.Where("AND rb.CurrentStatus IS NOT NULL").Build()
-                : builder.Where($"AND rb.CurrentStatus NOT IN ({inClause})").Build();
-        
+                ? builder.Where("rb.CurrentStatus IS NOT NULL").Build()
+                : builder.Where($"rb.CurrentStatus NOT IN ({inClause})").Build();
+
         return null;
     }
 
-    private static StatementPart? BuildDeletionStatementParts(List<long>  deletionUserIds, string? matchType)
+    private static StatementPart? BuildDeletionCondition(List<long> deletionUserIds, string? matchType, string prefix)
     {
         if (string.IsNullOrWhiteSpace(matchType)) return null;
         var builder = new StatementPartBuilder();
-        
-        foreach (var deletionUserId in deletionUserIds) 
-            builder.WithIndexedParameter("@DeletionUserId", deletionUserId);
-        
+
+        foreach (var deletionUserId in deletionUserIds)
+            builder.WithIndexedParameter($"{prefix}DeletionUserId", deletionUserId);
+
         var inClause = builder.Build().JoinParameterKeys();
-        
+
         // a redblock has at most one deleter, so a non-empty list only ever matches deleted redblocks.
         // redblocks that are not deleted can only be selected with an empty list ("and" + [])
 
@@ -268,130 +289,129 @@ public class RedblockRepository(IUnitOfWork uow, ILogger<IRedblockRepository> lo
         if (matchType.Equals("or", StringComparison.OrdinalIgnoreCase))
             return deletionUserIds.Count == 0
                 ? null
-                : builder.Where($"AND rb.DeletedBy IN ({inClause})").Build();
+                : builder.Where($"rb.DeletedBy IN ({inClause})").Build();
 
         // not + [] = return only deleted redblocks
         // not + [...] = return deleted redblocks that were not deleted by any of the specified users
         if (matchType.Equals("not", StringComparison.OrdinalIgnoreCase))
             return deletionUserIds.Count == 0
-                ? builder.Where("AND rb.DeletedBy IS NOT NULL").Build()
-                : builder.Where($"AND rb.DeletedBy NOT IN ({inClause})").Build();
+                ? builder.Where("rb.DeletedBy IS NOT NULL").Build()
+                : builder.Where($"rb.DeletedBy NOT IN ({inClause})").Build();
 
         // and + [] = return only redblocks that are not deleted
         // and + [...] = rejected by the service, a redblock cannot be deleted by multiple users
         if (matchType.Equals("and", StringComparison.OrdinalIgnoreCase))
             return deletionUserIds.Count == 0
-                ? builder.Where("AND rb.DeletedBy IS NULL").Build()
+                ? builder.Where("rb.DeletedBy IS NULL").Build()
                 : null;
-        
+
         return null;
     }
 
-    private static StatementPart? BuildUserAssignmentStatementParts(List<long> userIds, string? matchType)
+    private static StatementPart? BuildUserAssignmentCondition(List<long> userIds, string? matchType, string prefix)
     {
         if (string.IsNullOrWhiteSpace(matchType)) return null;
         var builder = new StatementPartBuilder();
-        
+
         foreach (var userId in userIds)
-            builder.WithIndexedParameter("@UserId", userId);
-        
+            builder.WithIndexedParameter($"{prefix}UserId", userId);
+
         var inClause = builder.Build().JoinParameterKeys();
-        
+        const string noUsers = "NOT EXISTS (SELECT 1 FROM `Redblocks.UserAssignments` rua WHERE rua.RedblockId = rb.RedblockId)";
+        var hasAllUsers = $"rb.RedblockId IN (SELECT rua.RedblockId FROM `Redblocks.UserAssignments` rua WHERE rua.AssignedTo IN ({inClause}) GROUP BY rua.RedblockId HAVING COUNT(DISTINCT rua.AssignedTo) = {userIds.Count})";
+
         // or + [] = return regardless of assignment status
         // or + [...] = return redblocks with at least one of the specified user assignments
         if (matchType.Equals("or", StringComparison.OrdinalIgnoreCase))
             return userIds.Count == 0
                 ? null
-                : builder.Where($"AND EXISTS (SELECT 1 FROM `Redblocks.UserAssignments` rua WHERE rua.RedblockId = rb.RedblockId AND rua.AssignedTo IN ({inClause}))").Build();
+                : builder.Where($"EXISTS (SELECT 1 FROM `Redblocks.UserAssignments` rua WHERE rua.RedblockId = rb.RedblockId AND rua.AssignedTo IN ({inClause}))").Build();
 
         // not + [] = return only redblocks with user assignments ("not empty")
         // not + [...] = return redblocks with no user assignments or user assignments that do not include any of the specified users
         if (matchType.Equals("not", StringComparison.OrdinalIgnoreCase))
             return userIds.Count == 0
-                ? builder.Where("AND EXISTS (SELECT 1 FROM `Redblocks.UserAssignments` rua WHERE rua.RedblockId = rb.RedblockId)").Build()
-                : builder.Where($"AND NOT EXISTS (SELECT 1 FROM `Redblocks.UserAssignments` rua WHERE rua.RedblockId = rb.RedblockId AND rua.AssignedTo IN ({inClause}))").Build();
+                ? builder.Where("EXISTS (SELECT 1 FROM `Redblocks.UserAssignments` rua WHERE rua.RedblockId = rb.RedblockId)").Build()
+                : builder.Where($"NOT EXISTS (SELECT 1 FROM `Redblocks.UserAssignments` rua WHERE rua.RedblockId = rb.RedblockId AND rua.AssignedTo IN ({inClause}))").Build();
 
         // and + [] = return redblocks with no users assigned ("empty")
         // and + [...] = return redblocks that have all the specified users assigned
-        if  (matchType.Equals("and", StringComparison.OrdinalIgnoreCase))
+        if (matchType.Equals("and", StringComparison.OrdinalIgnoreCase))
             return userIds.Count == 0
-                ? builder.Where("AND NOT EXISTS (SELECT 1 FROM `Redblocks.UserAssignments` rua WHERE rua.RedblockId = rb.RedblockId)").Build()
-                : builder.Join($"INNER JOIN (SELECT RedblockId FROM `Redblocks.UserAssignments` WHERE AssignedTo IN ({inClause}) GROUP BY RedblockId HAVING COUNT(DISTINCT AssignedTo) = {userIds.Count}) rua ON rb.RedblockId = rua.RedblockId").Build();
+                ? builder.Where(noUsers).Build()
+                : builder.Where(hasAllUsers).Build();
 
         // exact + [] = return redblocks with no users assigned ("empty")
         // exact + [...] = return redblocks that have all the specified users assigned and no other users
         if (matchType.Equals("exact", StringComparison.OrdinalIgnoreCase))
             return userIds.Count == 0
-                ? builder.Where("AND NOT EXISTS (SELECT 1 FROM `Redblocks.UserAssignments` rua WHERE rua.RedblockId = rb.RedblockId)").Build()
-                : builder
-                    .Join($"INNER JOIN (SELECT RedblockId FROM `Redblocks.UserAssignments` WHERE AssignedTo IN ({inClause}) GROUP BY RedblockId HAVING COUNT(DISTINCT AssignedTo) = {userIds.Count}) rua ON rb.RedblockId = rua.RedblockId")
-                    .Where($"AND NOT EXISTS (SELECT 1 FROM `Redblocks.UserAssignments` rua_other WHERE rua_other.RedblockId = rb.RedblockId AND rua_other.AssignedTo NOT IN ({inClause}))")
-                    .Build();
+                ? builder.Where(noUsers).Build()
+                : builder.Where($"({hasAllUsers} AND NOT EXISTS (SELECT 1 FROM `Redblocks.UserAssignments` rua_other WHERE rua_other.RedblockId = rb.RedblockId AND rua_other.AssignedTo NOT IN ({inClause})))").Build();
 
         return null;
     }
 
-    private static StatementPart? BuildRoleAssignmentStatementParts(List<string> roles, string? matchType)
+    private static StatementPart? BuildRoleAssignmentCondition(List<string> roles, string? matchType, string prefix)
     {
         if (string.IsNullOrWhiteSpace(matchType)) return null;
         var builder = new StatementPartBuilder();
-        
+
         foreach (var role in roles)
-            builder.WithIndexedParameter("@Role", role);
-        
+            builder.WithIndexedParameter($"{prefix}Role", role);
+
         var inClause = builder.Build().JoinParameterKeys();
-        
+        const string noRoles = "NOT EXISTS (SELECT 1 FROM `Redblocks.RoleAssignments` rra WHERE rra.RedblockId = rb.RedblockId)";
+        var hasAllRoles = $"rb.RedblockId IN (SELECT rra.RedblockId FROM `Redblocks.RoleAssignments` rra WHERE rra.RoleName IN ({inClause}) GROUP BY rra.RedblockId HAVING COUNT(DISTINCT rra.RoleName) = {roles.Count})";
+
         // or + [] = return regardless of role assignment status
         // or + [...] = return redblocks with at least one of the specified role assignments
         if (matchType.Equals("or", StringComparison.OrdinalIgnoreCase))
             return roles.Count == 0
                 ? null
-                : builder.Where($"AND EXISTS (SELECT 1 FROM `Redblocks.RoleAssignments` rra WHERE rra.RedblockId = rb.RedblockId AND rra.RoleName IN ({inClause}))").Build();
+                : builder.Where($"EXISTS (SELECT 1 FROM `Redblocks.RoleAssignments` rra WHERE rra.RedblockId = rb.RedblockId AND rra.RoleName IN ({inClause}))").Build();
 
         // not + [] = return only redblocks with role assignments ("not empty")
         // not + [...] = return redblocks with no role assignments or role assignments that do not include any of the specified roles
         if (matchType.Equals("not", StringComparison.OrdinalIgnoreCase))
             return roles.Count == 0
-                ? builder.Where("AND EXISTS (SELECT 1 FROM `Redblocks.RoleAssignments` rra WHERE rra.RedblockId = rb.RedblockId)").Build()
-                : builder.Where($"AND NOT EXISTS (SELECT 1 FROM `Redblocks.RoleAssignments` rra WHERE rra.RedblockId = rb.RedblockId AND rra.RoleName IN ({inClause}))").Build();
+                ? builder.Where("EXISTS (SELECT 1 FROM `Redblocks.RoleAssignments` rra WHERE rra.RedblockId = rb.RedblockId)").Build()
+                : builder.Where($"NOT EXISTS (SELECT 1 FROM `Redblocks.RoleAssignments` rra WHERE rra.RedblockId = rb.RedblockId AND rra.RoleName IN ({inClause}))").Build();
 
         // and + [] = return redblocks with no roles assigned ("empty")
         // and + [...] = return redblocks that have all the specified roles assigned
-        if  (matchType.Equals("and", StringComparison.OrdinalIgnoreCase))
+        if (matchType.Equals("and", StringComparison.OrdinalIgnoreCase))
             return roles.Count == 0
-                ? builder.Where("AND NOT EXISTS (SELECT 1 FROM `Redblocks.RoleAssignments` rra WHERE rra.RedblockId = rb.RedblockId)").Build()
-                : builder.Join($"INNER JOIN (SELECT RedblockId FROM `Redblocks.RoleAssignments` WHERE RoleName IN ({inClause}) GROUP BY RedblockId HAVING COUNT(DISTINCT RoleName) = {roles.Count}) rra ON rb.RedblockId = rra.RedblockId").Build();
+                ? builder.Where(noRoles).Build()
+                : builder.Where(hasAllRoles).Build();
 
         // exact + [] = return redblocks with no roles assigned ("empty")
         // exact + [...] = return redblocks that have all the specified roles assigned and no other roles
         if (matchType.Equals("exact", StringComparison.OrdinalIgnoreCase))
             return roles.Count == 0
-                ? builder.Where("AND NOT EXISTS (SELECT 1 FROM `Redblocks.RoleAssignments` rra WHERE rra.RedblockId = rb.RedblockId)").Build()
-                : builder
-                    .Join($"INNER JOIN (SELECT RedblockId FROM `Redblocks.RoleAssignments` WHERE RoleName IN ({inClause}) GROUP BY RedblockId HAVING COUNT(DISTINCT RoleName) = {roles.Count}) rra ON rb.RedblockId = rra.RedblockId")
-                    .Where($"AND NOT EXISTS (SELECT 1 FROM `Redblocks.RoleAssignments` rra_other WHERE rra_other.RedblockId = rb.RedblockId AND rra_other.RoleName NOT IN ({inClause}))")
-                    .Build();
+                ? builder.Where(noRoles).Build()
+                : builder.Where($"({hasAllRoles} AND NOT EXISTS (SELECT 1 FROM `Redblocks.RoleAssignments` rra_other WHERE rra_other.RedblockId = rb.RedblockId AND rra_other.RoleName NOT IN ({inClause})))").Build();
 
         return null;
     }
 
-    private static StatementPart? BuildMessageStatementParts(string searchText, string? matchType)
+    private static StatementPart? BuildMessageCondition(string searchText, string? matchType, string prefix)
     {
         if (string.IsNullOrWhiteSpace(matchType)) return null;
-        var builder = new StatementPartBuilder().WithParameter("@SearchText", searchText);
-        
+        var parameter = $"{prefix}SearchText";
+        var builder = new StatementPartBuilder().WithParameter(parameter, searchText);
+
         if (matchType.Equals("contains", StringComparison.OrdinalIgnoreCase))
-            return builder.Where($"AND rb.Message LIKE CONCAT('%', @SearchText, '%')").Build();
-        
+            return builder.Where($"rb.Message LIKE CONCAT('%', {parameter}, '%')").Build();
+
         if (matchType.Equals("startsWith", StringComparison.OrdinalIgnoreCase))
-            return builder.Where($"AND rb.Message LIKE CONCAT(@SearchText, '%')").Build();
-        
+            return builder.Where($"rb.Message LIKE CONCAT({parameter}, '%')").Build();
+
         if (matchType.Equals("endsWith", StringComparison.OrdinalIgnoreCase))
-            return builder.Where($"AND rb.Message LIKE CONCAT('%', @SearchText)").Build();
-        
+            return builder.Where($"rb.Message LIKE CONCAT('%', {parameter})").Build();
+
         if (matchType.Equals("exact", StringComparison.OrdinalIgnoreCase))
-            return builder.Where($"AND rb.Message = @SearchText").Build();
-        
+            return builder.Where($"rb.Message = {parameter}").Build();
+
         return null;
     }
     

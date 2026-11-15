@@ -14,31 +14,18 @@ public class RedblockSearchRequest
     /// The radius around the Location to search within. Location must be provided to search within a given radius.
     /// </summary>
     public long? Radius { get; set; }
-    
+
     /// <summary>
-    /// Only return redblocks that match the StatusFilter. If null, status is not used for filtering.
+    /// Groups of filters. A redblock is returned if it matches at least one group (OR); within a group every filter that is set must match (AND).
+    /// An empty list applies no filtering. A filter that should apply to every alternative (e.g. "not deleted") must be repeated in each group.
+    /// At most <see cref="MaxFilterGroups"/> groups are allowed, and each group must set at least one filter.
     /// </summary>
-    public StatusFilter? StatusFilter { get; set; }
-    
+    public List<FilterGroup> FilterGroups { get; set; } = [];
+
     /// <summary>
-    /// Only return redblocks that match the DeletionFilter. If null, deletion status is not used for filtering.
+    /// The maximum number of filter groups allowed in one search.
     /// </summary>
-    public DeletionFilter? DeletionFilter { get; set; }
-    
-    /// <summary>
-    /// Only return redblocks that match the UserAssignmentFilter. If null, user assignments are not used for filtering.
-    /// </summary>
-    public UserAssignmentFilter? UserAssignmentFilter { get; set; }
-    
-    /// <summary>
-    /// Only return redblocks that match the RoleAssignmentFilter. If null, role assignments are not used for filtering.
-    /// </summary>
-    public RoleAssignmentFilter? RoleAssignmentFilter { get; set; }
-    
-    /// <summary>
-    /// Only return redblocks that match the MessageFilter. If null, message content is not used for filtering.
-    /// </summary>
-    public MessageFilter? MessageFilter { get; set; }
+    public const int MaxFilterGroups = 10;
 
     /// <summary>
     /// Number of results to return per page.
@@ -49,6 +36,37 @@ public class RedblockSearchRequest
     /// The current page of results to return.
     /// </summary>
     public long CurrentPage { get; set; } = 1;
+}
+
+/// <summary>
+/// A set of filters that must all match (AND). Filters that are null are not used.
+/// </summary>
+public class FilterGroup
+{
+    /// <summary>
+    /// Only match redblocks that match the StatusFilter. If null, status is not used for filtering.
+    /// </summary>
+    public StatusFilter? StatusFilter { get; set; }
+
+    /// <summary>
+    /// Only match redblocks that match the DeletionFilter. If null, deletion status is not used for filtering.
+    /// </summary>
+    public DeletionFilter? DeletionFilter { get; set; }
+
+    /// <summary>
+    /// Only match redblocks that match the UserAssignmentFilter. If null, user assignments are not used for filtering.
+    /// </summary>
+    public UserAssignmentFilter? UserAssignmentFilter { get; set; }
+
+    /// <summary>
+    /// Only match redblocks that match the RoleAssignmentFilter. If null, role assignments are not used for filtering.
+    /// </summary>
+    public RoleAssignmentFilter? RoleAssignmentFilter { get; set; }
+
+    /// <summary>
+    /// Only match redblocks that match the MessageFilter. If null, message content is not used for filtering.
+    /// </summary>
+    public MessageFilter? MessageFilter { get; set; }
 }
 
 /// <summary>

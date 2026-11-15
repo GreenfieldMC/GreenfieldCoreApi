@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using GreenfieldCoreDataAccess.Database.Models;
 using GreenfieldCoreDataAccess.Database.Repositories.Interfaces;
 using GreenfieldCoreDataAccess.Database.UnitOfWork;
 using GreenfieldCoreServices.Extensions;
@@ -397,33 +398,22 @@ public class RedblockService(IUnitOfWork uow, ILogger<IRedblockService> logger, 
         if (searchFilter.Location is not null && searchFilter.Radius is not null && searchFilter.Radius < 0)
             return Result<RedblockSearchResult>.Failure("Radius filter cannot be negative.");
         
-        if (searchFilter.StatusFilter is not null && !searchFilter.StatusFilter.MatchType.IsAnyOf("or", "not"))
-            return Result<RedblockSearchResult>.Failure("Status filter must have a match type of either 'or' or 'not'.");
-        
-        if (searchFilter.DeletionFilter is not null && !searchFilter.DeletionFilter.MatchType.IsAnyOf("or", "not", "and"))
-            return Result<RedblockSearchResult>.Failure("Deletion filter must have a match type of either 'or' or 'not' or 'and'.");
+        var filterGroups = searchFilter.FilterGroups ?? [];
+        if (filterGroups.Count > RedblockSearchRequest.MaxFilterGroups)
+            return Result<RedblockSearchResult>.Failure($"A search can have at most {RedblockSearchRequest.MaxFilterGroups} filter groups.");
 
-        if (searchFilter.DeletionFilter is not null && searchFilter.DeletionFilter.MatchType.IsAnyOf("and") && searchFilter.DeletionFilter.Users.Count > 0)
-            return Result<RedblockSearchResult>.Failure("Deletion filter cannot use the 'and' match type with users, a redblock can only be deleted by one user. Use 'and' with no users to find redblocks that are not deleted.");
+        for (var i = 0; i < filterGroups.Count; i++)
+        {
+            var groupError = ValidateFilterGroup(filterGroups[i]);
+            if (groupError is not null)
+                return Result<RedblockSearchResult>.Failure($"filterGroups[{i}]: {groupError}");
+        }
 
-        if (searchFilter.UserAssignmentFilter is not null && !searchFilter.UserAssignmentFilter.MatchType.IsAnyOf("or", "not", "and", "exact"))
-            return Result<RedblockSearchResult>.Failure("User assignment filter must have a match type of either 'or', 'not', 'and' or 'exact'.");
-
-        if (searchFilter.RoleAssignmentFilter is not null && !searchFilter.RoleAssignmentFilter.MatchType.IsAnyOf("or", "not", "and", "exact"))
-            return Result<RedblockSearchResult>.Failure("Role assignment filter must have a match type of either 'or', 'not', 'and' or 'exact'.");
-        
-        if (searchFilter.MessageFilter is not null && !searchFilter.MessageFilter.MatchType.IsAnyOf("contains", "startsWith", "endsWith", "exact"))
-            return Result<RedblockSearchResult>.Failure("Message filter must have a match type of either 'contains', 'startsWith', 'endsWith', or 'exact'.");
-        
         var redblockRepo = uow.Repository<IRedblockRepository>();
-        
-        var searchResult = await redblockRepo.SelectRedblocksByProject(projectEntity.ProjectId, 
+
+        var searchResult = await redblockRepo.SelectRedblocksByProject(projectEntity.ProjectId,
             searchFilter.Location, searchFilter.Radius,
-            searchFilter.StatusFilter?.Statuses ?? [], searchFilter.StatusFilter?.MatchType,
-            searchFilter.DeletionFilter?.Users ?? [], searchFilter.DeletionFilter?.MatchType,
-            searchFilter.UserAssignmentFilter?.Users ?? [], searchFilter.UserAssignmentFilter?.MatchType,
-            searchFilter.RoleAssignmentFilter?.Roles ?? [], searchFilter.RoleAssignmentFilter?.MatchType,
-            searchFilter.MessageFilter?.Content ?? "", searchFilter.MessageFilter?.MatchType, 
+            filterGroups.Select(ToFilterSet).ToList(),
             searchFilter.ResultsPerPage, searchFilter.CurrentPage);
 
         if (!searchResult.TryGetDataNonNull(out var actualSearchResult))
@@ -436,6 +426,51 @@ public class RedblockService(IUnitOfWork uow, ILogger<IRedblockService> logger, 
             TotalResults = actualSearchResult.TotalResults
         });
     }
+
+    /// <summary>
+    /// Checks one filter group of a search request.
+    /// </summary>
+    /// <returns>An error message, or null if the group is valid.</returns>
+    private static string? ValidateFilterGroup(FilterGroup group)
+    {
+        if (group.StatusFilter is null && group.DeletionFilter is null && group.UserAssignmentFilter is null
+            && group.RoleAssignmentFilter is null && group.MessageFilter is null)
+            return "A filter group must set at least one filter. To search without filters, send no filter groups.";
+
+        if (group.StatusFilter is not null && !group.StatusFilter.MatchType.IsAnyOf("or", "not"))
+            return "Status filter must have a match type of either 'or' or 'not'.";
+
+        if (group.DeletionFilter is not null && !group.DeletionFilter.MatchType.IsAnyOf("or", "not", "and"))
+            return "Deletion filter must have a match type of either 'or' or 'not' or 'and'.";
+
+        if (group.DeletionFilter is not null && group.DeletionFilter.MatchType.IsAnyOf("and") && group.DeletionFilter.Users.Count > 0)
+            return "Deletion filter cannot use the 'and' match type with users, a redblock can only be deleted by one user. Use 'and' with no users to find redblocks that are not deleted.";
+
+        if (group.UserAssignmentFilter is not null && !group.UserAssignmentFilter.MatchType.IsAnyOf("or", "not", "and", "exact"))
+            return "User assignment filter must have a match type of either 'or', 'not', 'and' or 'exact'.";
+
+        if (group.RoleAssignmentFilter is not null && !group.RoleAssignmentFilter.MatchType.IsAnyOf("or", "not", "and", "exact"))
+            return "Role assignment filter must have a match type of either 'or', 'not', 'and' or 'exact'.";
+
+        if (group.MessageFilter is not null && !group.MessageFilter.MatchType.IsAnyOf("contains", "startsWith", "endsWith", "exact"))
+            return "Message filter must have a match type of either 'contains', 'startsWith', 'endsWith', or 'exact'.";
+
+        return null;
+    }
+
+    private static RedblockFilterSet ToFilterSet(FilterGroup group) => new()
+    {
+        Statuses = group.StatusFilter?.Statuses ?? [],
+        StatusMatchType = group.StatusFilter?.MatchType,
+        DeletionUserIds = group.DeletionFilter?.Users ?? [],
+        DeletionMatchType = group.DeletionFilter?.MatchType,
+        AssignedUserIds = group.UserAssignmentFilter?.Users ?? [],
+        UserAssignmentMatchType = group.UserAssignmentFilter?.MatchType,
+        AssignedRoles = group.RoleAssignmentFilter?.Roles ?? [],
+        RoleAssignmentMatchType = group.RoleAssignmentFilter?.MatchType,
+        MessageText = group.MessageFilter?.Content ?? "",
+        MessageMatchType = group.MessageFilter?.MatchType
+    };
 
     public async Task<Result<RedblockStatus>> AddRedblockStatus(string projectKey, long keyNumber, string status, long createdBy)
     {
