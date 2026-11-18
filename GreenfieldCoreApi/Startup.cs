@@ -67,6 +67,7 @@ public static class Startup
         services.AddTransient<ICodeRepository, CodeRepository>();
         services.AddTransient<IApplicationRepository, ApplicationRepository>();
         services.AddTransient<IRedblockRepository, RedblockRepository>();
+        services.AddTransient<IRedblockImportRepository, RedblockImportRepository>();
     }
     
     internal static void ConfigureScheduledTasks(this IServiceCollection services)
@@ -78,6 +79,8 @@ public static class Startup
         services.AddSingleton<DiscordTokenRefreshTask>();
         services.AddHostedService(sp => sp.GetRequiredService<DiscordTokenRefreshTask>());
         services.AddKeyedSingleton<ITokenRefreshTrigger>("discord", (sp, _) => sp.GetRequiredService<DiscordTokenRefreshTask>());
+
+        services.AddHostedService<RedblockImportTask>();
     }
     
     internal static void ConfigureServices(this IServiceCollection services)
@@ -90,6 +93,8 @@ public static class Startup
         services.AddTransient<ICodeService, CodeService>();
         services.AddTransient<IBuilderApplicationService, BuilderApplicationService>();
         services.AddTransient<IRedblockService, RedblockService>();
+        services.AddTransient<IRedblockImportService, RedblockImportService>();
+        services.AddSingleton<RedblockImportQueue>();
         services.AddHttpClient<IPatreonApi, PatreonApi>(client => { client.BaseAddress = new Uri("https://www.patreon.com/api/oauth2/"); });
         services.AddHttpClient<IDiscordApi, DiscordApi>(client => { client.BaseAddress = new Uri("https://discord.com"); });
         services.AddHttpClient<IGitHubApi, GitHubApi>(client => { client.BaseAddress = new Uri("https://api.github.com"); });

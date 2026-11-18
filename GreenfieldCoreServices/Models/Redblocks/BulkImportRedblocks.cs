@@ -31,6 +31,7 @@ public class BulkImportRedblockEntry
 
 public class BulkImportFollowupWorkItem
 {
+    public required long ImportEntryId { get; init; }
     public required string LegacyRedblockKey { get; init; }
     public required long ProjectId { get; init; }
     public required long RedblockId { get; init; }
@@ -43,6 +44,11 @@ public class BulkImportFollowupWorkItem
     public required List<(string Status, long CreatedByUserId)> Statuses { get; init; }
     public required bool IsDeleted { get; init; }
     public required long SystemUserId { get; init; }
+
+    /// <summary>
+    /// The errors of this redblock so far. The follow-ups add theirs, then save them all with the entry.
+    /// </summary>
+    public required List<string> Errors { get; init; }
 }
 
 public class BulkImportRedblockLocation
@@ -51,16 +57,5 @@ public class BulkImportRedblockLocation
     public required long Y { get; init; }
     public required long Z { get; init; }
     public required string World { get; init; }
-}
-
-public class BulkImportRedblocksResult
-{
-    public required IEnumerable<string> Errors { get; init; }
-
-    /// <summary>
-    /// The keys of the legacy redblocks that were not created at all. Redblocks that were created but had a follow-up
-    /// (status, assignment, entity) fail are only reported in <see cref="Errors"/>, since they exist now.
-    /// </summary>
-    public required IEnumerable<string> FailedRedblocks { get; init; }
 }
 

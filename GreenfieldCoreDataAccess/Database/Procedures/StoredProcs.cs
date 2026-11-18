@@ -839,5 +839,87 @@ public static class StoredProcs
             parms.Add("p_KeyNumber", args.keyNumber, DbType.Int64);
             return parms;
         });
+
+        /// <summary>
+        /// Procedures related to bulk importing legacy redblocks. usp_WipeImportJob is intentionally not listed here,
+        /// since it is only meant to be run by hand.
+        /// </summary>
+        public static class Imports
+        {
+            /// <summary>
+            /// Inserts a new queued import job.
+            /// </summary>
+            public static readonly ParameterizedProcedure<(Guid importJobId, int total)> InsertImportJob = new("`Redblocks.usp_InsertImportJob`", (args, parms) =>
+            {
+                parms.Add("p_ImportJobId", args.importJobId, DbType.Guid);
+                parms.Add("p_Total", args.total, DbType.Int32);
+                return parms;
+            });
+
+            /// <summary>
+            /// Updates the state of an import job, and its error message.
+            /// </summary>
+            public static readonly ParameterizedProcedure<(Guid importJobId, string state, string? errorMessage)> UpdateImportJobState = new("`Redblocks.usp_UpdateImportJobState`", (args, parms) =>
+            {
+                parms.Add("p_ImportJobId", args.importJobId, DbType.Guid);
+                parms.Add("p_State", args.state, DbType.String, size: 16);
+                parms.Add("p_ErrorMessage", args.errorMessage, DbType.String, size: 1024);
+                return parms;
+            });
+
+            /// <summary>
+            /// Marks every queued or running import job as failed. Returns the number of jobs that were failed.
+            /// </summary>
+            public static readonly ParameterizedQuerySingleProcedure<long, string> FailUnfinishedImportJobs = new("`Redblocks.usp_FailUnfinishedImportJobs`", (errorMessage, parms) =>
+            {
+                parms.Add("p_ErrorMessage", errorMessage, DbType.String, size: 1024);
+                return parms;
+            });
+
+            /// <summary>
+            /// Selects an import job with its processed and failed entry counts.
+            /// </summary>
+            public static readonly ParameterizedQuerySingleProcedure<RedblockImportJobEntity?, Guid> SelectImportJob = new("`Redblocks.usp_SelectImportJob`", (importJobId, parms) =>
+            {
+                parms.Add("p_ImportJobId", importJobId, DbType.Guid);
+                return parms;
+            });
+
+            /// <summary>
+            /// Inserts an import entry. Inserting an Importing entry claims the legacy key, or inserts a Skipped entry if it is already claimed.
+            /// </summary>
+            public static readonly ParameterizedQuerySingleProcedure<RedblockImportEntryInsertEntity?, (Guid importJobId, string legacyKey, long? projectId, string state, string? errors)> InsertImportEntry = new("`Redblocks.usp_InsertImportEntry`", (args, parms) =>
+            {
+                parms.Add("p_ImportJobId", args.importJobId, DbType.Guid);
+                parms.Add("p_LegacyKey", args.legacyKey, DbType.String, size: 64);
+                parms.Add("p_ProjectId", args.projectId, DbType.Int64);
+                parms.Add("p_State", args.state, DbType.String, size: 16);
+                parms.Add("p_Errors", args.errors, DbType.String);
+                return parms;
+            });
+
+            /// <summary>
+            /// Finishes an Importing entry as Imported or Failed.
+            /// </summary>
+            public static readonly ParameterizedProcedure<(long importEntryId, string state, long? redblockId, string? errors)> UpdateImportEntry = new("`Redblocks.usp_UpdateImportEntry`", (args, parms) =>
+            {
+                parms.Add("p_ImportEntryId", args.importEntryId, DbType.Int64);
+                parms.Add("p_State", args.state, DbType.String, size: 16);
+                parms.Add("p_RedblockId", args.redblockId, DbType.Int64);
+                parms.Add("p_Errors", args.errors, DbType.String);
+                return parms;
+            });
+
+            /// <summary>
+            /// Selects up to a limit of a job's entries after the given entry id, in order.
+            /// </summary>
+            public static readonly ParameterizedQueryProcedure<RedblockImportEntryEntity, (Guid importJobId, long afterImportEntryId, int limit)> SelectImportEntries = new("`Redblocks.usp_SelectImportEntries`", (args, parms) =>
+            {
+                parms.Add("p_ImportJobId", args.importJobId, DbType.Guid);
+                parms.Add("p_AfterImportEntryId", args.afterImportEntryId, DbType.Int64);
+                parms.Add("p_Limit", args.limit, DbType.Int32);
+                return parms;
+            });
+        }
     }
 }

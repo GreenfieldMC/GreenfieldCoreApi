@@ -10,7 +10,7 @@ namespace GreenfieldCoreApi.Controllers;
 [ApiController]
 [ApiVersion("1.0")]
 [Route("api/v{version:apiVersion}/[controller]")]
-public class RedblocksController(IRedblockService redblockService) : ControllerBase
+public class RedblocksController(IRedblockService redblockService, IRedblockImportService redblockImportService) : ControllerBase
 {
 
     #region Project Routes
@@ -108,25 +108,40 @@ public class RedblocksController(IRedblockService redblockService) : ControllerB
     #region Redblock Routes
 
     /// <summary>
-    /// Imports redblocks in bulk using the external import payload format.
+    /// Queues a bulk import of legacy redblocks using the external import payload format. The import runs in the
+    /// background; use the returned id with the status route to follow it.
     /// </summary>
     /// <param name="request">The bulk import payload.</param>
-    /// <returns>A message, the import errors, and the keys of the legacy redblocks that were not created. Both lists are empty when everything imported.</returns>
+    /// <returns>202 Accepted with the id of the import job.</returns>
     [HttpPost("import/bulk")]
     [Authorize(Roles = "Redblocks.Write,Redblocks")]
+    [ProducesResponseType(StatusCodes.Status202Accepted)]
     public async Task<IActionResult> BulkImportRedblocks([FromBody] BulkImportRedblocksRequest request)
     {
-        var importResult = await redblockService.BulkImportRedblocks(request);
-        if (!importResult.TryGetDataNonNull(out var importData))
-            return Problem(statusCode: importResult.GetStatusCodeInt(), detail: importResult.ErrorMessage);
+        var queueResult = await redblockImportService.QueueBulkImport(request);
+        if (!queueResult.TryGetData(out var importJobId))
+            return Problem(statusCode: queueResult.GetStatusCodeInt(), detail: queueResult.ErrorMessage);
 
-        var errors = importData.Errors.ToList();
-        return Ok(new
-        {
-            Message = errors.Count == 0 ? "Bulk import completed successfully with no errors." : "Bulk import completed with some errors.",
-            Errors = errors,
-            importData.FailedRedblocks
-        });
+        return Accepted(new { ImportJobId = importJobId });
+    }
+
+    /// <summary>
+    /// Gets the status of a bulk import, and the redblocks it has finished after the cursor.
+    /// </summary>
+    /// <param name="importJobId">The id returned when the import was queued.</param>
+    /// <param name="cursor">The cursor from the previous status, or 0 for the first request.</param>
+    /// <returns>The import status.</returns>
+    [HttpGet("import/bulk/{importJobId:guid}")]
+    [Authorize(Roles = "Redblocks.Read,Redblocks")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [Produces(typeof(BulkImportStatus))]
+    public async Task<IActionResult> GetBulkImportStatus(Guid importJobId, [FromQuery] long cursor = 0)
+    {
+        var statusResult = await redblockImportService.GetBulkImportStatus(importJobId, cursor);
+        return statusResult.TryGetDataNonNull(out var status)
+            ? Ok(status)
+            : Problem(statusCode: statusResult.GetStatusCodeInt(), detail: statusResult.ErrorMessage);
     }
 
     /// <summary>

@@ -9,13 +9,6 @@ public interface IRedblockService
     #region Redblock Service Methods
 
     /// <summary>
-    /// Imports redblocks in bulk.
-    /// </summary>
-    /// <param name="request">Bulk redblock import request.</param>
-    /// <returns>A result containing import errors for skipped/failed rows.</returns>
-    Task<Result<BulkImportRedblocksResult>> BulkImportRedblocks(BulkImportRedblocksRequest request);
-
-    /// <summary>
     /// Creates a new redblock at the specified coordinates within a project.
     /// </summary>
     /// <param name="projectKey"></param>
