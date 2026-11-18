@@ -111,7 +111,7 @@ public class RedblocksController(IRedblockService redblockService) : ControllerB
     /// Imports redblocks in bulk using the external import payload format.
     /// </summary>
     /// <param name="request">The bulk import payload.</param>
-    /// <returns>A placeholder response until business logic is implemented.</returns>
+    /// <returns>A message and the errors for the redblocks that could not be imported, which is empty when they all imported.</returns>
     [HttpPost("import/bulk")]
     [Authorize(Roles = "Redblocks.Write,Redblocks")]
     public async Task<IActionResult> BulkImportRedblocks([FromBody] BulkImportRedblocksRequest request)
@@ -121,9 +121,11 @@ public class RedblocksController(IRedblockService redblockService) : ControllerB
             return Problem(statusCode: importResult.GetStatusCodeInt(), detail: importResult.ErrorMessage);
 
         var errors = importData.Errors.ToList();
-        return errors.Count == 0
-            ? Ok("Bulk import completed successfully with no errors.")
-            : Ok(new { Message = "Bulk import completed with some errors.", Errors = errors });
+        return Ok(new
+        {
+            Message = errors.Count == 0 ? "Bulk import completed successfully with no errors." : "Bulk import completed with some errors.",
+            Errors = errors
+        });
     }
 
     /// <summary>
