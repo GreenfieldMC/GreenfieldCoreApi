@@ -43,7 +43,8 @@ public class RedblockService(IUnitOfWork uow, ILogger<IRedblockService> logger, 
             return Result<BulkImportRedblocksResult>.Failure(systemUserResult.ErrorMessage ?? "System user does not exist.", systemUserResult.StatusCode);
 
         var migrationIssues = new ConcurrentBag<string>();
-        
+        var failedRedblocks = new List<string>();
+
         var repo = uow.Repository<IRedblockRepository>();
         var followupTaskSemaphore = new SemaphoreSlim(maxParallelFollowupWorkers);
         var pendingFollowupTasks = new List<Task>();
@@ -53,6 +54,7 @@ public class RedblockService(IUnitOfWork uow, ILogger<IRedblockService> logger, 
             if (!projectMap.TryGetValue(legacyRedblock.Value.Location.World, out var associatedProject))
             {
                 migrationIssues.Add($"Redblock {legacyRedblock.Key} references world {legacyRedblock.Value.Location.World} which does not have an associated project in the import payload.");
+                failedRedblocks.Add(legacyRedblock.Key);
                 continue;
             }
 
@@ -123,6 +125,7 @@ public class RedblockService(IUnitOfWork uow, ILogger<IRedblockService> logger, 
                 if (!redblockInsertResult.TryGetDataNonNull(out var redblockEntity))
                 {
                     migrationIssues.Add($"Failed to create redblock for legacy redblock {legacyRedblock.Key}: {redblockInsertResult.ErrorMessage}");
+                    failedRedblocks.Add(legacyRedblock.Key);
                     uow.Rollback();
                     continue;
                 }
@@ -151,6 +154,7 @@ public class RedblockService(IUnitOfWork uow, ILogger<IRedblockService> logger, 
                     uow.Rollback();
 
                 migrationIssues.Add($"Unexpected failure while creating base redblock for legacy redblock {legacyRedblock.Key}: {ex.Message}");
+                failedRedblocks.Add(legacyRedblock.Key);
                 continue;
             }
             
@@ -166,7 +170,7 @@ public class RedblockService(IUnitOfWork uow, ILogger<IRedblockService> logger, 
 
         await Task.WhenAll(pendingFollowupTasks);
 
-        return Result<BulkImportRedblocksResult>.Success(new BulkImportRedblocksResult { Errors = migrationIssues.ToList() });
+        return Result<BulkImportRedblocksResult>.Success(new BulkImportRedblocksResult { Errors = migrationIssues.ToList(), FailedRedblocks = failedRedblocks });
     }
 
     private async Task ProcessFollowupWithThrottle(BulkImportFollowupWorkItem workItem, ConcurrentBag<string> migrationIssues, SemaphoreSlim followupTaskSemaphore)

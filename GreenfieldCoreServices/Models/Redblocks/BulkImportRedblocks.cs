@@ -56,5 +56,11 @@ public class BulkImportRedblockLocation
 public class BulkImportRedblocksResult
 {
     public required IEnumerable<string> Errors { get; init; }
+
+    /// <summary>
+    /// The keys of the legacy redblocks that were not created at all. Redblocks that were created but had a follow-up
+    /// (status, assignment, entity) fail are only reported in <see cref="Errors"/>, since they exist now.
+    /// </summary>
+    public required IEnumerable<string> FailedRedblocks { get; init; }
 }
 
